@@ -11,6 +11,8 @@ import { WEEKDAYS, money, ordinal } from '../ui/format';
 import { PALETTES } from '../theme/palettes';
 import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
 import { SyncSheet } from '../sheets/SyncSheet';
+import { setGuide } from '../guide';
+import { resetTips } from '../ui/ScreenTip';
 import { ChangelogSheet } from '../sheets/ChangelogSheet';
 import { APP_VERSION, CHANGELOG } from '../changelog';
 import { syncLabel, useSyncStatus } from '../state/sync';
@@ -115,6 +117,27 @@ export function Settings() {
           </div>
 
           <div className="card">
+            <h3>Help</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+              <button
+                className="btn small ghost"
+                onClick={() => {
+                  update((d) => setGuide(d, { dismissed: false }));
+                  ui.go('home');
+                }}
+              >
+                Show setup guide
+              </button>
+              <button
+                className="btn small ghost"
+                onClick={() => {
+                  resetTips();
+                  ui.toast('Tips will show again on each screen.');
+                }}
+              >
+                Show tips again
+              </button>
+            </div>
             <h3>Backup & data</h3>
             <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
               Everything is saved on this device (and in your account when sync is on). A downloaded backup is still a good safety net.

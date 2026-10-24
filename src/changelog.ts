@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.8.0',
+    date: '2026-10-24',
+    title: 'Setup guide and tips',
+    items: [
+      'A Getting started checklist on Home walks a new household through setup, one step at a time, ticking steps off as they’re done.',
+      '"Set up from scratch" on the welcome screen starts the guide.',
+      'Each screen explains itself the first time you open it. Settings → Help brings the guide and tips back.',
+    ],
+  },
+  {
     version: '0.7.2',
     date: '2026-10-24',
     title: 'Sidebar hover highlight',

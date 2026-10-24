@@ -6,6 +6,7 @@ import { money, monthYear, shortDate } from '../ui/format';
 import { FundSheet } from '../sheets/EditSheets';
 import { MilestoneSheet } from '../sheets/MilestoneSheet';
 import { AssignSheet } from '../sheets/AssignSheet';
+import { ScreenTip } from '../ui/ScreenTip';
 
 const STATUS: Record<string, string> = { achieved: 'Done', projected: 'Projected', 'needs-details': 'Needs details', 'not-on-track': 'Not on track yet' };
 
@@ -32,6 +33,10 @@ export function Goals() {
           </button>
         </div>
       </header>
+
+      <ScreenTip id="goals">
+        milestones show estimated dates and only get a check when a real balance gets there. Savings funds are money you're setting aside; give one a target date and Flake works out how much to set aside each paycheck.
+      </ScreenTip>
 
       <div className="plan-grid">
         <div className="stack">

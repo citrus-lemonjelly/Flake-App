@@ -11,8 +11,8 @@ import { AssignSheet } from '../sheets/AssignSheet';
 import { BillSheet, CategorySheet, DebtSheet, FundSheet } from '../sheets/EditSheets';
 import type { PeriodPlan, PlanLine } from '../engine';
 import { PaydayRow } from '../ui/PaydayRow';
+import { useTip } from '../ui/ScreenTip';
 
-const TIP_KEY = 'flake.tip.plan';
 
 export function allocationTargetName(data: AppData, a: Allocation): string {
   const t = a.target;
@@ -74,18 +74,6 @@ function writePref(key: string, value: string) {
   }
 }
 
-/** A dismissible explainer, remembered per device. */
-function useTip(key: string): [boolean, () => void] {
-  const [show, setShow] = useState(() => readPref(key, 'shown') !== 'hidden');
-  return [
-    show,
-    () => {
-      setShow(false);
-      writePref(key, 'hidden');
-    },
-  ];
-}
-
 export function Plan() {
   const [view, setView] = useState<PlanView>(() => {
     const v = readPref(VIEW_KEY, 'month');
@@ -131,7 +119,7 @@ function PaycheckView() {
   const update = useUpdate();
   const ui = useUI();
   const [i, setI] = useState(0);
-  const [showTip, hideTip] = useTip(TIP_KEY);
+  const [showTip, hideTip] = useTip('plan');
   const p = x.periods[i];
   if (!p) return <Empty>Add a paycheck in Settings to see your plan.</Empty>;
 
@@ -366,7 +354,7 @@ function RangeView({ kind }: { kind: 'week' | 'month' }) {
   const update = useUpdate();
   const ui = useUI();
   const [i, setI] = useState(0);
-  const [showTip, hideTip] = useTip(`flake.tip.${kind}`);
+  const [showTip, hideTip] = useTip(kind);
   const ranges = useMemo(() => (kind === 'week' ? weekRanges(data, x.today, 8) : monthRanges(x.today, 6)), [kind, data, x.today]);
   const range = ranges[i]!;
   const r = useMemo(() => planRange(data, range.start, range.end), [data, range]);

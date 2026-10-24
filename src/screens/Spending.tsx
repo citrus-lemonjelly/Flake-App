@@ -9,6 +9,7 @@ import { Icon } from '../ui/icons';
 import { money, monthOnly, shortDate, weekdayDate } from '../ui/format';
 import { LogSheet } from '../sheets/LogSheet';
 import { SpendingSheet } from '../sheets/SpendingSheet';
+import { ScreenTip } from '../ui/ScreenTip';
 
 type View = 'paycheck' | 'week' | 'month';
 /** 'all', a category id, 'other' (logged outside budgets), or 'checkin' (worked out at check-ins). */
@@ -96,6 +97,9 @@ export function Spending() {
           </button>
         </div>
       </header>
+      <ScreenTip id="spending">
+        everything you log with <b>+</b>, plus spending a check-in found in your balance. Tap a budget to see only its entries, or tap an entry to fix it or sort it into a budget.
+      </ScreenTip>
       <div style={{ marginBottom: 12, maxWidth: 420 }}>
         <Segmented
           label="Spending view"

@@ -254,6 +254,13 @@ export type Strategy = 'avalanche' | 'snowball' | 'custom';
 export const PALETTE_IDS = ['ocean', 'ember', 'forest', 'rose', 'graphite', 'violet'] as const;
 export type PaletteId = (typeof PALETTE_IDS)[number];
 
+export interface GuideState {
+  started?: boolean;
+  dismissed?: boolean;
+  /** Steps that can't be detected from data, confirmed by the user (e.g. 'timing', 'keep'). */
+  confirmed?: string[];
+}
+
 export interface Settings {
   strategy: Strategy;
   /** Debt ids, highest priority first, used when strategy is 'custom'. */
@@ -271,6 +278,8 @@ export interface Settings {
   showDebtOnHome: boolean;
   /** When bills leave the bank unless a bill says otherwise. */
   billTiming: PaidOn;
+  /** The setup guide: started from the welcome screen, hidden, and steps confirmed by hand. */
+  guide?: GuideState;
   /** Last edit, for sync (settings sync as one record). */
   updatedAt?: string;
 }

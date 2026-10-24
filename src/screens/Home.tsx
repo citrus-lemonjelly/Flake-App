@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { byId, live } from '../engine';
 import { completeAllocation, recordPaycheck } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
@@ -10,10 +10,15 @@ import { STRATEGY_LABEL, minus, money, monthOnly, monthYear, monthsBetween, shor
 import { AssignSheet } from '../sheets/AssignSheet';
 import { CheckInSheet } from '../sheets/CheckInSheet';
 import { AssumptionsSheet, CushionSheet, MeaningSheet } from '../sheets/InfoSheets';
-import { PaycheckSheet } from '../sheets/EditSheets';
+import { BillSheet, CategorySheet, DebtSheet, IncomeSheet, PaycheckSheet } from '../sheets/EditSheets';
+import { HouseholdSheet, TimingSheet } from '../sheets/GuideSheets';
+import { SyncSheet } from '../sheets/SyncSheet';
+import { useSyncStatus } from '../state/sync';
+import { confirmStep, guideSteps, setGuide, type GuideStep, type GuideStepId } from '../guide';
 import { LogSheet } from '../sheets/LogSheet';
 import { SpendingSheet } from '../sheets/SpendingSheet';
 import { basisText as payBasisText } from '../ui/PaydayRow';
+import { ScreenTip } from '../ui/ScreenTip';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
 const shortName = (n: string) => n.replace(/\s+(card|loan)$/i, '');
@@ -66,8 +71,13 @@ export function Home() {
         </div>
       </header>
 
+      <ScreenTip id="home">
+        <b>Safe to spend</b> is what you can use before payday after bills, budgets and the money you keep in the bank. <b>Next up</b> is the one thing to do now. Check in with your balance a couple of times a week and Flake keeps the rest up to date.
+      </ScreenTip>
+
       <div className="home-grid">
         <div className="stack">
+          <GettingStarted />
           <CashHero />
           <NextUp />
           <Budgets />
@@ -100,6 +110,136 @@ export function Home() {
         </div>
       </div>
     </>
+  );
+}
+
+/** The setup guide: steps tick themselves off; the next one is spelled out with its button. */
+function GettingStarted() {
+  const data = useData();
+  const ui = useUI();
+  const update = useUpdate();
+  const sync = useSyncStatus();
+  const [showDone, setShowDone] = useState(false);
+  if (data.settings.guide?.dismissed) return null;
+
+  const steps = guideSteps(data, !!sync.email);
+  const required = steps.filter((s) => !s.optional);
+  const doneCount = required.filter((s) => s.done).length;
+  // Sync is only offered when this copy of Flake has sync set up.
+  const todo = steps.filter((s) => !s.done && !(s.id === 'sync' && sync.status === 'off'));
+  const hide = () => update((d) => setGuide(d, { dismissed: true }));
+
+  const open = (s: GuideStep) => {
+    const sheets: Record<GuideStepId, () => ReactNode> = {
+      names: () => <HouseholdSheet />,
+      paychecks: () => <IncomeSheet />,
+      timing: () => <TimingSheet />,
+      bills: () => <BillSheet />,
+      budgets: () => <CategorySheet />,
+      debts: () => <DebtSheet />,
+      keep: () => <CushionSheet />,
+      checkin: () => <CheckInSheet />,
+      sync: () => <SyncSheet />,
+    };
+    ui.open(sheets[s.id]());
+  };
+  const skip = (s: GuideStep) =>
+    s.id === 'debts' ? (
+      <button className="link" onClick={() => update((d) => confirmStep(d, 'debts'))}>
+        I don't have any
+      </button>
+    ) : s.id === 'sync' ? (
+      <button className="link" onClick={() => update((d) => confirmStep(d, 'sync'))}>
+        Skip
+      </button>
+    ) : null;
+
+  if (doneCount === required.length && !todo.length)
+    return (
+      <div className="card guide">
+        <div className="row">
+          <div>
+            <h3 style={{ margin: 0 }}>You're all set up 🎉</h3>
+            <div className="muted" style={{ fontSize: 13 }}>
+              From here on, just check in with your balance a couple of times a week.
+            </div>
+          </div>
+          <button className="btn small ghost" onClick={hide}>
+            Hide
+          </button>
+        </div>
+      </div>
+    );
+
+  const [next, ...rest] = todo;
+  const done = steps.filter((s) => s.done);
+  return (
+    <div className="card guide">
+      <h3>
+        Getting started
+        <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span className="faint" style={{ fontSize: 13, fontWeight: 500 }}>
+            {doneCount} of {required.length} done
+          </span>
+          <button className="link" onClick={hide}>
+            Hide
+          </button>
+        </span>
+      </h3>
+      <Bar value={doneCount / required.length} />
+      {next && (
+        <div className="guide-next">
+          <div className="label">Next</div>
+          <h4>{next.title}</h4>
+          <p>{next.why}</p>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <button className="btn small" onClick={() => open(next)}>
+              {next.action}
+            </button>
+            {skip(next)}
+          </div>
+        </div>
+      )}
+      {rest.length > 0 && (
+        <ul className="list guide-list">
+          {rest.map((s) => (
+            <li key={s.id}>
+              <span className="c" aria-hidden="true" />
+              <div className="grow">
+                {s.title}
+                {s.optional && <span className="faint"> · optional</span>}
+              </div>
+              {skip(s)}
+              <button className="btn small ghost" onClick={() => open(s)}>
+                {s.action}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {done.length > 0 && (
+        <>
+          <button className="link" style={{ marginTop: 10 }} onClick={() => setShowDone(!showDone)}>
+            {showDone ? 'Hide' : 'Show'} what's done ({done.length})
+          </button>
+          {showDone && (
+            <ul className="list guide-list">
+              {done.map((s) => (
+                <li key={s.id} className="done">
+                  <span className="c" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="grow">{s.title}</div>
+                  <button className="link" onClick={() => open(s)}>
+                    Edit
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

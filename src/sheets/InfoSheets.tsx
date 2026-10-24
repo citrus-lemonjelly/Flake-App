@@ -6,6 +6,7 @@ import { useUI } from '../state/ui';
 import { MoneyField, Sheet } from '../ui/components';
 import { STRATEGY_LABEL, minus, money, monthYear, shortDate } from '../ui/format';
 import { DebtSheet } from './EditSheets';
+import { confirmStep } from '../guide';
 
 /** Definitions for the two numbers people act on: Safe to spend and the pot. */
 export function MeaningSheet() {
@@ -170,7 +171,7 @@ export function CushionSheet() {
         <button
           className="btn primary"
           onClick={() => {
-            update((d) => updateSettings(d, { cashBuffer: v ?? 0 }));
+            update((d) => confirmStep(updateSettings(d, { cashBuffer: v ?? 0 }), 'keep'));
             ui.close();
           }}
         >

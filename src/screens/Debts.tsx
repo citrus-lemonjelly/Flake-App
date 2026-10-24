@@ -10,6 +10,7 @@ import { Icon } from '../ui/icons';
 import { duration, money, monthOnly, monthYear } from '../ui/format';
 import { DebtSheet, PaymentSheet } from '../sheets/EditSheets';
 import { debtSegments } from './Home';
+import { ScreenTip } from '../ui/ScreenTip';
 
 const STRATEGIES: { value: Strategy; label: string; long: string }[] = [
   { value: 'avalanche', label: 'Highest rate', long: 'Highest rate first' },
@@ -63,6 +64,10 @@ export function Debts() {
           </button>
         </div>
       </header>
+
+      <ScreenTip id="debts">
+        choose a payoff order and how much extra goes to debt each month; Flake compares the options and marks the cheapest. Fill in each debt's rate and minimum so the dates are accurate. The house card shows what extra principal would save.
+      </ScreenTip>
 
       <div className="debt-grid">
         <div className="stack">

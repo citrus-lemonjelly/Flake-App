@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { sampleData } from './data/sample';
-import { live, today } from './engine';
-import { entity } from './model/factory';
-import type { IncomeSource } from './model/types';
-import { replaceEverything, updateSettings, upsert } from './store/actions';
+import { live } from './engine';
+import { setGuide } from './guide';
+import { replaceEverything, updateSettings } from './store/actions';
 import { importJson } from './store/storage';
 import { useData, useStore, useThemeSync, useUpdate } from './state/store';
 import { UIProvider, useUI, type Route } from './state/ui';
@@ -57,7 +56,7 @@ function SyncPrompt() {
 function Gate() {
   const data = useData();
   const empty = live(data.incomes).length === 0 && live(data.debts).length === 0 && live(data.bills).length === 0;
-  return empty ? <Welcome /> : <Shell />;
+  return empty && !data.settings.guide?.started ? <Welcome /> : <Shell />;
 }
 
 /**
@@ -216,21 +215,12 @@ function Welcome() {
         <button
           className="btn ghost block"
           onClick={() => {
-            // A placeholder paycheck gets past this screen; Settings is where it gets filled in.
-            store.update((d) => upsert(d, 'incomes', entity<IncomeSource>({
-              name: 'My paycheck',
-              owner: 'Me',
-              amount: 0,
-              schedule: { kind: 'biweekly', anchorDate: today() },
-              adjust: 'previousBusinessDay',
-              earlyDepositDays: 0,
-              anchorsPayPeriod: true,
-            })));
-            ui.go('settings');
-            ui.toast('Start by filling in your paycheck.');
+            // Opens the app with the setup guide on Home walking through each step.
+            store.update((d) => setGuide(d, { started: true, dismissed: false }));
+            ui.go('home');
           }}
         >
-          Start from scratch
+          Set up from scratch
         </button>
         <input
           ref={file}

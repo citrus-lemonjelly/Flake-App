@@ -53,6 +53,7 @@ export const appDataSchema = z.object({
     palette: z.enum(PALETTE_IDS).default('ocean'),
     showDebtOnHome: z.boolean().default(true),
     billTiming: z.enum(['payday', 'due-date']).default('due-date'),
+    guide: z.object({ started: z.boolean().optional(), dismissed: z.boolean().optional(), confirmed: z.array(z.string()).optional() }).optional(),
     updatedAt: z.string().optional(),
   }),
   incomes: z.array(
