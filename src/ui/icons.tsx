@@ -33,6 +33,7 @@ const paths = {
       <path d="M12 10v5M12 18v.5" />
     </>
   ),
+  receipt: <path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3" />,
   bank: <path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18" />,
   trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
   house: <path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-5h4v5" />,

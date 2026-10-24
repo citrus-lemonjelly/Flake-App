@@ -12,6 +12,7 @@ import { CheckInSheet } from '../sheets/CheckInSheet';
 import { AssumptionsSheet, CushionSheet, MeaningSheet } from '../sheets/InfoSheets';
 import { PaycheckSheet } from '../sheets/EditSheets';
 import { LogSheet } from '../sheets/LogSheet';
+import { SpendingSheet } from '../sheets/SpendingSheet';
 import { basisText as payBasisText } from '../ui/PaydayRow';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
@@ -70,6 +71,7 @@ export function Home() {
           <CashHero />
           <NextUp />
           <Budgets />
+          <RecentSpending />
         </div>
         <div className="stack">
           {data.settings.showDebtOnHome && <DebtCard />}
@@ -448,18 +450,20 @@ function Budgets() {
           const left = l.amount - spent;
           return (
             <li key={l.refId}>
-              <div className="grow">
-                <div className="row" style={{ fontSize: 14 }}>
-                  <span>{l.name}</span>
-                  <span style={{ color: left < 0 ? 'var(--warn)' : undefined, fontWeight: 600 }}>{left < 0 ? `${money(-left)} over` : `${money(left)} left`}</span>
+              <button className="rowbtn" onClick={() => ui.go('spending', { categoryId: l.refId })} aria-label={`${l.name} spending`}>
+                <div className="grow">
+                  <div className="row" style={{ fontSize: 14 }}>
+                    <span>{l.name}</span>
+                    <span style={{ color: left < 0 ? 'var(--warn)' : undefined, fontWeight: 600 }}>{left < 0 ? `${money(-left)} over` : `${money(left)} left`}</span>
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    <Bar value={l.amount ? spent / l.amount : 0} tone={left < 0 ? 'warn' : undefined} />
+                  </div>
+                  <div className="explain">
+                    {money(spent, true)} of {money(l.amount, true)} spent
+                  </div>
                 </div>
-                <div style={{ marginTop: 6 }}>
-                  <Bar value={l.amount ? spent / l.amount : 0} tone={left < 0 ? 'warn' : undefined} />
-                </div>
-                <div className="explain">
-                  {money(spent, true)} of {money(l.amount, true)} spent
-                </div>
-              </div>
+              </button>
             </li>
           );
         })}
@@ -478,6 +482,47 @@ function Budgets() {
           <span>Left across all budgets</span>
           <span>{money(leftOverall)}</span>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** The last few things logged, with a way into the full Spending screen. */
+function RecentSpending() {
+  const data = useData();
+  const ui = useUI();
+  const recent = live(data.spending)
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 3);
+  const label = (s: (typeof recent)[number]) => (s.inferred ? 'Found at check-in' : s.categoryId ? (byId(data.categories, s.categoryId)?.name ?? 'Removed budget') : 'Other');
+  return (
+    <div className="card">
+      <h3>
+        Recent spending
+        <button className="link" onClick={() => ui.go('spending')}>
+          See all
+        </button>
+      </h3>
+      {recent.length ? (
+        <ul className="list">
+          {recent.map((s) => (
+            <li key={s.id}>
+              <button className="rowbtn" onClick={() => ui.open(<SpendingSheet id={s.id} />)}>
+                <div className="grow">
+                  {s.note && !s.inferred ? s.note : label(s)}
+                  <div className="sub">
+                    {weekdayDate(s.date)}
+                    {s.note && !s.inferred ? ` · ${label(s)}` : ''}
+                  </div>
+                </div>
+                <span style={{ fontWeight: 600 }}>{money(s.amount)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Empty>Nothing logged yet. Tap + after a purchase.</Empty>
       )}
     </div>
   );

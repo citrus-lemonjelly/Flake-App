@@ -12,6 +12,7 @@ import { Segmented } from './ui/components';
 import { PALETTES } from './theme/palettes';
 import { Home } from './screens/Home';
 import { Plan } from './screens/Plan';
+import { Spending } from './screens/Spending';
 import { Debts } from './screens/Debts';
 import { Goals } from './screens/Goals';
 import { Settings } from './screens/Settings';
@@ -24,6 +25,7 @@ import { syncLabel, useSyncStatus } from './state/sync';
 const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
   { route: 'home', label: 'Home', desk: 'Dashboard', icon: 'home' },
   { route: 'plan', label: 'Plan', desk: 'Plan', icon: 'plan' },
+  { route: 'spending', label: 'Spending', desk: 'Spending', icon: 'receipt' },
   { route: 'debts', label: 'Debts', desk: 'Debts & house', icon: 'debts' },
   { route: 'goals', label: 'Goals', desk: 'Goals & savings', icon: 'goals' },
   { route: 'settings', label: 'Settings', desk: 'Settings', icon: 'settings' },
@@ -78,8 +80,9 @@ function Shell() {
   const ui = useUI();
   const syncStatus = useSyncStatus();
   usePayoffCelebration();
-  const screen = { home: <Home />, plan: <Plan />, debts: <Debts />, goals: <Goals />, settings: <Settings /> }[ui.route];
-  const tabs = NAV.filter((n) => n.route !== 'settings');
+  const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, debts: <Debts />, goals: <Goals />, settings: <Settings /> }[ui.route];
+  // The phone tab bar keeps four tabs; Spending opens from Home and Settings from its gear.
+  const tabs = NAV.filter((n) => n.route !== 'settings' && n.route !== 'spending');
   return (
     <div className="shell">
       <aside className="side" aria-label="Main">
