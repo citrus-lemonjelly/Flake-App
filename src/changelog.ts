@@ -12,6 +12,12 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.7.2',
+    date: '2026-10-24',
+    title: 'Sidebar hover highlight',
+    items: ['On desktop, sidebar tabs light up in your color scheme when you hover over them.'],
+  },
+  {
     version: '0.7.1',
     date: '2026-10-24',
     title: 'Version and changelog',

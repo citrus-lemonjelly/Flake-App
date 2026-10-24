@@ -90,6 +90,15 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
   .side .brand i { width: 26px; height: 26px; border-radius: 8px; background: var(--grad); display: inline-block; }
   .side button.nav { border: 0; background: none; display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: var(--r-sm); color: var(--ink2); font-weight: 500; text-align: left; }
   .side button.nav[aria-current='page'] { background: var(--accent-soft); color: var(--accent); }
+  /* Hover: a wash of the theme color, an accent bar growing from the left edge, and a small icon nudge. */
+  .side button.nav { position: relative; transition: background-color 0.22s ease, color 0.22s ease; }
+  .side button.nav::before { content: ''; position: absolute; left: 0; top: 22%; bottom: 22%; width: 3px; border-radius: 3px; background: var(--grad); transform: scaleY(0); transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .side button.nav svg { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .side button.nav:hover { background: color-mix(in oklab, var(--accent) 9%, transparent); color: var(--accent); }
+  .side button.nav:hover::before, .side button.nav[aria-current='page']::before { transform: scaleY(1); }
+  .side button.nav:hover svg { transform: translateX(2px) scale(1.08); }
+  .side button.nav:active { background: color-mix(in oklab, var(--accent) 15%, transparent); }
+  .side button.nav[aria-current='page']:hover { background: var(--accent-soft); }
   .side .cta { margin-top: 14px; }
   .side .side-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
   .side .foot { font-size: 12px; color: var(--ink3); padding: 6px 10px 0; }
@@ -368,3 +377,8 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .release h3 { font-size: 15px; margin: 10px 0 4px; display: flex; gap: 8px; align-items: center; }
 .release ul { margin: 0; padding-left: 18px; color: var(--ink2); font-size: 14px; }
 .release li { margin: 3px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .side button.nav, .side button.nav::before, .side button.nav svg { transition: none; }
+  .side button.nav:hover svg { transform: none; }
+}
