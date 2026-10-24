@@ -2,7 +2,7 @@ import type { Allocation, AppData, Cents, Debt, Funding, Id, ISODate } from '../
 import { addDays, addMonths, clampedDay, daysBetween, makeDate, monthKey, weekday, yearMonth } from './dates';
 import { live } from './live';
 import { splitEvenly, sum } from './money';
-import { allPaydays, payPeriods, paychecksPerYear, periodStartsInMonth, type PayPeriod, type Payday } from './payCalendar';
+import { allPaydays, expectedPay, payPeriods, paychecksPerYear, periodStartsInMonth, type PayPeriod, type Payday } from './payCalendar';
 
 export type PlanLineKind = 'bill' | 'debt' | 'category' | 'fund';
 
@@ -157,7 +157,7 @@ export interface MonthlyAverages {
 /** Long-run monthly averages: weekly pay counts 52.18 weeks a year, not 48. */
 export function monthlyAverages(data: AppData): MonthlyAverages {
   const income = Math.round(
-    sum(live(data.incomes).map((s) => (s.amount * paychecksPerYear(s.schedule)) / 12)),
+    sum(live(data.incomes).map((s) => (expectedPay(data, s).amount * paychecksPerYear(s.schedule)) / 12)),
   );
   const bills = sum(live(data.bills).map((b) => b.amount));
   const debtPayments = sum(live(data.debts).filter((d) => d.balance !== 0).map(debtMonthlyPayment));

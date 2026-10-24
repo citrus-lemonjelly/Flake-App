@@ -35,10 +35,21 @@ export type PaySchedule =
 /** What happens when a scheduled payday lands on a weekend or bank holiday. */
 export type PaydayAdjust = 'none' | 'previousBusinessDay' | 'nextBusinessDay';
 
+/**
+ * Hourly pay: each paycheck is estimated as hours × rate × take-home %, where
+ * take-home % is net ÷ gross from a real paystub (taxes and deductions).
+ */
+export interface HourlyPay {
+  rate: Cents; // gross per hour
+  usualHours: number; // per paycheck, used until hours are logged
+  takeHomePct: number; // 0–100
+}
+
 export interface IncomeSource extends Entity {
   name: string;
   owner: Owner;
-  amount: Cents; // take-home per paycheck
+  /** Take-home per paycheck. For hourly pay this is only the fallback before any estimate. */
+  amount: Cents;
   schedule: PaySchedule;
   adjust: PaydayAdjust;
   /** The bank may post this deposit up to N business days before payday. Display only; plans use payday. */
@@ -47,6 +58,21 @@ export interface IncomeSource extends Entity {
   anchorsPayPeriod: boolean;
   startDate?: ISODate;
   endDate?: ISODate;
+  /** Set for hourly pay; absent for a fixed paycheck. */
+  hourly?: HourlyPay;
+  /** Ask for the real amount after each payday (on by default for hourly pay). */
+  confirmOnPayday?: boolean;
+}
+
+/**
+ * What one specific paycheck actually was: hours logged before payday,
+ * and/or the real take-home amount confirmed after it landed.
+ */
+export interface PaycheckRecord extends Entity {
+  sourceId: Id;
+  payday: ISODate; // the adjusted payday this record belongs to
+  hours: number | null;
+  amount: Cents | null; // actual take-home, once confirmed
 }
 
 /** Money that actually arrived outside the regular plan: commission bonuses, refunds, gifts. */
@@ -239,6 +265,7 @@ export interface AppData {
   settings: Settings;
   incomes: IncomeSource[];
   incomeReceived: IncomeReceived[];
+  paychecks: PaycheckRecord[];
   bills: Bill[];
   categories: Category[];
   spending: Spending[];

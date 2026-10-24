@@ -31,6 +31,7 @@ export function emptyData(): AppData {
     settings: { ...DEFAULT_SETTINGS },
     incomes: [],
     incomeReceived: [],
+    paychecks: [],
     bills: [],
     categories: [],
     spending: [],

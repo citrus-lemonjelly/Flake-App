@@ -33,7 +33,12 @@ export interface Assumption {
   debtId?: Id;
 }
 
+/** How far back an unconfirmed paycheck still gets a "was it $X?" prompt. */
+const CONFIRM_WINDOW_DAYS = 7;
+
 export type NextAction =
+  | { kind: 'confirm-pay'; payday: Payday }
+  | { kind: 'log-hours'; payday: Payday }
   | { kind: 'check-in'; reason: string }
   | { kind: 'assign'; amount: Cents }
   | { kind: 'mark-done'; allocationId: Id; amount: Cents }
@@ -145,16 +150,28 @@ export function derive(data: AppData, now: ISODate = todayFn()): Derived {
 
   const safe = estimatedBalance === null ? null : safeToAssign(data, now, estimatedBalance);
   const plannedNotDone = (current?.allocations ?? []).filter((a) => a.status === 'planned');
-  const nextAction: NextAction =
-    !lastCheckIn
+  // Paychecks that landed recently but whose real amount hasn't been confirmed (hourly pay asks by default).
+  const asksToConfirm = new Set(live(data.incomes).filter((s) => s.confirmOnPayday ?? !!s.hourly).map((s) => s.id));
+  const toConfirm = allPaydays(data, addDays(now, -CONFIRM_WINDOW_DAYS), now).filter((p) => asksToConfirm.has(p.sourceId) && p.basis !== 'actual');
+  // Hourly paychecks coming up this week whose hours aren't in yet.
+  const hourlyIds = new Set(live(data.incomes).filter((s) => s.hourly).map((s) => s.id));
+  const needsHours = allPaydays(data, addDays(now, 1), addDays(now, 6)).filter((p) => hourlyIds.has(p.sourceId) && p.basis !== 'hours' && p.basis !== 'actual');
+
+  // Ask about the paycheck that landed most recently first.
+  const latestToConfirm = toConfirm.at(-1);
+  const nextAction: NextAction = latestToConfirm
+    ? { kind: 'confirm-pay', payday: latestToConfirm }
+    : !lastCheckIn
       ? { kind: 'check-in', reason: 'Add your bank balance to see what’s safe to spend.' }
       : paydaysSinceCheckIn > 0
         ? { kind: 'check-in', reason: `${paydaysSinceCheckIn} ${paydaysSinceCheckIn === 1 ? 'payday has' : 'paydays have'} landed since your last check-in.` }
-        : current && current.unassigned > 0
-          ? { kind: 'assign', amount: current.unassigned }
-          : plannedNotDone[0]
-            ? { kind: 'mark-done', allocationId: plannedNotDone[0].id, amount: plannedNotDone[0].amount }
-            : { kind: 'none' };
+        : needsHours[0]
+          ? { kind: 'log-hours', payday: needsHours[0] }
+          : current && current.unassigned > 0
+            ? { kind: 'assign', amount: current.unassigned }
+            : plannedNotDone[0]
+              ? { kind: 'mark-done', allocationId: plannedNotDone[0].id, amount: plannedNotDone[0].amount }
+              : { kind: 'none' };
 
   return {
     today: now,

@@ -66,8 +66,14 @@ export const appDataSchema = z.object({
       anchorsPayPeriod: z.boolean(),
       startDate: date.optional(),
       endDate: date.optional(),
+      hourly: z.object({ rate: cents, usualHours: z.number().min(0).max(200), takeHomePct: z.number().min(0).max(100) }).optional(),
+      confirmOnPayday: z.boolean().optional(),
     }),
   ),
+  // Added after v1 shipped; older backups get an empty list.
+  paychecks: z
+    .array(z.object({ ...base, sourceId: z.string(), payday: date, hours: z.number().min(0).max(200).nullable(), amount: cents.nullable() }))
+    .default([]),
   incomeReceived: z.array(
     z.object({ ...base, date, amount: cents, sourceId: z.string().nullable(), kind: z.enum(['bonus', 'other']), note: z.string() }),
   ),

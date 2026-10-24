@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { byId } from '../engine';
-import { completeAllocation } from '../store/actions';
+import { completeAllocation, recordPaycheck } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import type { Derived } from '../state/derive';
@@ -10,6 +10,8 @@ import { STRATEGY_LABEL, minus, money, monthOnly, monthYear, monthsBetween, shor
 import { AssignSheet } from '../sheets/AssignSheet';
 import { CheckInSheet } from '../sheets/CheckInSheet';
 import { AssumptionsSheet, CushionSheet, MeaningSheet } from '../sheets/InfoSheets';
+import { PaycheckSheet } from '../sheets/EditSheets';
+import { basisText as payBasisText } from '../ui/PaydayRow';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
 const shortName = (n: string) => n.replace(/\s+(card|loan)$/i, '');
@@ -222,6 +224,73 @@ function NextUp() {
         </div>
       </div>
     );
+
+  if (n.kind === 'confirm-pay') {
+    const pd = n.payday;
+    const who = pd.owner === 'joint' ? pd.name : `${pd.owner}'s paycheck`;
+    return (
+      <div className="card">
+        <div className="label" style={{ marginBottom: 8 }}>
+          Next up
+        </div>
+        <div className="next">
+          <div className="ic">
+            <Icon name="check" size={20} />
+          </div>
+          <div>
+            <h4>
+              Did {who} land as {money(pd.amount)}?
+            </h4>
+            <p>
+              {weekdayDate(pd.payday)} · {payBasisText(pd, byId(data.incomes, pd.sourceId)?.hourly?.usualHours)}. Confirming it puts the real number in your plan.
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button
+            className="btn"
+            style={{ flex: 1 }}
+            onClick={() => {
+              update((d) => recordPaycheck(d, { sourceId: pd.sourceId, payday: pd.payday, amount: pd.amount }));
+              ui.toast(`Confirmed ${money(pd.amount)}`);
+            }}
+          >
+            Yes, {money(pd.amount)}
+          </button>
+          <button className="btn ghost" style={{ flex: 1 }} onClick={() => ui.open(<PaycheckSheet sourceId={pd.sourceId} payday={pd.payday} focus="amount" />)}>
+            Different amount
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (n.kind === 'log-hours') {
+    const pd = n.payday;
+    const source = byId(data.incomes, pd.sourceId);
+    return (
+      <div className="card">
+        <div className="label" style={{ marginBottom: 8 }}>
+          Next up
+        </div>
+        <div className="next">
+          <div className="ic">
+            <Icon name="plan" size={20} />
+          </div>
+          <div>
+            <h4>Log {pd.owner === 'joint' ? 'the' : `${pd.owner}'s`} hours</h4>
+            <p>
+              For the paycheck on {weekdayDate(pd.payday)}. Until then it's estimated at {money(pd.amount)}
+              {source?.hourly && pd.basis === 'usual' ? ` from the usual ${source.hourly.usualHours} hours` : ''}.
+            </p>
+          </div>
+        </div>
+        <button className="btn block" style={{ marginTop: 12 }} onClick={() => ui.open(<PaycheckSheet sourceId={pd.sourceId} payday={pd.payday} focus="hours" />)}>
+          Log hours
+        </button>
+      </div>
+    );
+  }
 
   if (n.kind === 'check-in')
     return (

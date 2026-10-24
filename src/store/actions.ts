@@ -6,6 +6,7 @@ import type {
   CollectionKey,
   Entity,
   Household,
+  PaycheckRecord,
   Id,
   ISODate,
   Settings,
@@ -46,7 +47,7 @@ export function updateHousehold(data: AppData, fields: Partial<Household>): AppD
   return { ...data, household: { ...data.household, ...fields, updatedAt: nowStamp() } };
 }
 
-export const ENTITY_KEYS: CollectionKey[] = ['incomes', 'incomeReceived', 'bills', 'categories', 'spending', 'debts', 'debtPayments', 'funds', 'allocations', 'checkIns', 'milestones'];
+export const ENTITY_KEYS: CollectionKey[] = ['incomes', 'paychecks', 'incomeReceived', 'bills', 'categories', 'spending', 'debts', 'debtPayments', 'funds', 'allocations', 'checkIns', 'milestones'];
 
 /** Stamp every record as just edited, e.g. after importing a backup, so sync uploads all of it. */
 export function touchAll(data: AppData): AppData {
@@ -90,6 +91,17 @@ export function logSpending(data: AppData, s: { date: ISODate; amount: Cents; ca
 
 export function logBonus(data: AppData, b: { date: ISODate; amount: Cents; sourceId?: Id | null; note?: string }): AppData {
   return upsert(data, 'incomeReceived', entity({ date: b.date, amount: b.amount, sourceId: b.sourceId ?? null, kind: 'bonus', note: b.note ?? '' }));
+}
+
+/**
+ * Save hours and/or the confirmed take-home for one paycheck. One record per
+ * source and payday; leaving a field undefined keeps what's already there.
+ */
+export function recordPaycheck(data: AppData, p: { sourceId: Id; payday: ISODate; hours?: number | null; amount?: Cents | null }): AppData {
+  const existing = data.paychecks.find((r) => !r.deletedAt && r.sourceId === p.sourceId && r.payday === p.payday);
+  const fields = { ...(p.hours !== undefined && { hours: p.hours }), ...(p.amount !== undefined && { amount: p.amount }) };
+  if (existing) return patch(data, 'paychecks', existing.id, fields);
+  return upsert(data, 'paychecks', entity<PaycheckRecord>({ sourceId: p.sourceId, payday: p.payday, hours: null, amount: null, ...fields }));
 }
 
 export function checkIn(data: AppData, c: { date: ISODate; balance: Cents; note?: string }): { data: AppData; checkIn: BalanceCheckIn } {

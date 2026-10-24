@@ -1,4 +1,4 @@
-import type { AppData, Cents, Id, ISODate, IncomeSource, Owner, PaySchedule } from '../model/types';
+import type { AppData, Cents, HourlyPay, Id, ISODate, IncomeSource, Owner, PaycheckRecord, PaySchedule } from '../model/types';
 import {
   addDays,
   addMonths,
@@ -13,11 +13,21 @@ import {
 } from './dates';
 import { live } from './live';
 
+/**
+ * Where a paycheck's amount came from:
+ * fixed (salary) · actual (confirmed after payday) · hours (logged hours × rate × take-home)
+ * · average (last few actual checks) · usual (usual hours, before any history).
+ */
+export type PayBasis = 'fixed' | 'actual' | 'hours' | 'average' | 'usual';
+
 export interface Payday {
   sourceId: Id;
   name: string;
   owner: Owner;
   amount: Cents;
+  basis: PayBasis;
+  /** Hours behind this paycheck, when logged. */
+  hours: number | null;
   /** The date on the employer's calendar (the 15th, the 30th, every Thursday). */
   scheduled: ISODate;
   /** The date after weekend/holiday adjustment. Plans use this date. */
@@ -89,6 +99,8 @@ export function paydaysFor(source: IncomeSource, from: ISODate, to: ISODate): Pa
         name: source.name,
         owner: source.owner,
         amount: source.amount,
+        basis: 'fixed' as PayBasis,
+        hours: null,
         scheduled,
         payday,
         earliestDeposit: businessDaysBefore(payday, source.earlyDepositDays),
@@ -97,9 +109,45 @@ export function paydaysFor(source: IncomeSource, from: ISODate, to: ISODate): Pa
     .filter((p) => p.payday >= from && p.payday <= to);
 }
 
+/** Take-home for a number of hours: hours × rate × take-home %. */
+export function hourlyTakeHome(h: HourlyPay, hours: number): Cents {
+  return Math.round((hours * h.rate * h.takeHomePct) / 100);
+}
+
+/** How many recent confirmed paychecks the hourly forecast averages. */
+const AVERAGE_OF = 6;
+
+/** What a future paycheck from this source is expected to be, before any hours are logged. */
+export function expectedPay(data: AppData, source: IncomeSource): { amount: Cents; basis: PayBasis } {
+  if (!source.hourly) return { amount: source.amount, basis: 'fixed' };
+  const actuals = live(data.paychecks)
+    .filter((p) => p.sourceId === source.id && p.amount !== null)
+    .sort((a, b) => b.payday.localeCompare(a.payday))
+    .slice(0, AVERAGE_OF);
+  if (actuals.length >= 2) return { amount: Math.round(actuals.reduce((s, p) => s + p.amount!, 0) / actuals.length), basis: 'average' };
+  return { amount: hourlyTakeHome(source.hourly, source.hourly.usualHours), basis: 'usual' };
+}
+
+/** The paycheck record for one source's payday, if any. */
+export function paycheckRecord(data: AppData, sourceId: Id, payday: ISODate): PaycheckRecord | undefined {
+  return live(data.paychecks).find((p) => p.sourceId === sourceId && p.payday === payday);
+}
+
+/**
+ * Every paycheck in [from, to] with its best-known amount:
+ * a confirmed actual, else logged hours, else the source's expected pay.
+ */
 export function allPaydays(data: AppData, from: ISODate, to: ISODate): Payday[] {
   return live(data.incomes)
-    .flatMap((s) => paydaysFor(s, from, to))
+    .flatMap((s) => {
+      const expected = expectedPay(data, s);
+      return paydaysFor(s, from, to).map((p): Payday => {
+        const rec = paycheckRecord(data, s.id, p.payday);
+        if (rec?.amount != null) return { ...p, amount: rec.amount, basis: 'actual', hours: rec.hours };
+        if (rec?.hours != null && s.hourly) return { ...p, amount: hourlyTakeHome(s.hourly, rec.hours), basis: 'hours', hours: rec.hours };
+        return { ...p, amount: expected.amount, basis: expected.basis };
+      });
+    })
     .sort((a, b) => (a.payday === b.payday ? a.name.localeCompare(b.name) : a.payday < b.payday ? -1 : 1));
 }
 

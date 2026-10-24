@@ -10,6 +10,7 @@ import { WEEKDAYS, minus, money, monthOnly, shortDate, weekdayDate } from '../ui
 import { AssignSheet } from '../sheets/AssignSheet';
 import { BillSheet, CategorySheet, DebtSheet, FundSheet } from '../sheets/EditSheets';
 import type { PeriodPlan, PlanLine } from '../engine';
+import { PaydayRow } from '../ui/PaydayRow';
 
 const TIP_KEY = 'flake.tip.plan';
 
@@ -173,17 +174,7 @@ function PaycheckView() {
             </h3>
             <ul className="list">
               {p.income.map((n, k) => (
-                <li key={k}>
-                  <div className="grow">
-                    {n.name}
-                    <div className="explain">
-                      {weekdayDate(n.payday)}
-                      {n.earliestDeposit !== n.payday && ` · your bank usually posts it ${shortDate(n.earliestDeposit)}`}
-                      {n.scheduled !== n.payday && ` · moved from ${shortDate(n.scheduled)} (weekend or holiday)`}
-                    </div>
-                  </div>
-                  <span>{money(n.amount)}</span>
-                </li>
+                <PaydayRow key={k} p={n} />
               ))}
             </ul>
           </div>
@@ -422,16 +413,7 @@ function RangeView({ kind }: { kind: 'week' | 'month' }) {
             {r.income.length ? (
               <ul className="list">
                 {r.income.map((n, k) => (
-                  <li key={k}>
-                    <div className="grow">
-                      {n.name}
-                      <div className="explain">
-                        {weekdayDate(n.payday)}
-                        {n.earliestDeposit !== n.payday && ` · your bank usually posts it ${shortDate(n.earliestDeposit)}`}
-                      </div>
-                    </div>
-                    <span>{money(n.amount)}</span>
-                  </li>
+                  <PaydayRow key={k} p={n} />
                 ))}
               </ul>
             ) : (

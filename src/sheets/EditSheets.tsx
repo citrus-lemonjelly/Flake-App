@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from 'react';
-import { byId } from '../engine';
+import { byId, expectedPay, hourlyTakeHome, paycheckRecord, today } from '../engine';
 import { entity } from '../model/factory';
-import type { Bill, Category, Cents, Debt, DebtKind, Fund, IncomeSource, PaySchedule } from '../model/types';
-import { logDebtPayment, remove, setDebtBalance, upsert } from '../store/actions';
+import type { Bill, Category, Cents, Debt, DebtKind, Fund, HourlyPay, IncomeSource, PaySchedule } from '../model/types';
+import { logDebtPayment, recordPaycheck, remove, setDebtBalance, upsert } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
-import { DateField, MoneyField, NumberField, SelectField, Sheet, TextField, Toggle } from '../ui/components';
-import { WEEKDAYS, money, ordinal } from '../ui/format';
+import { DateField, MoneyField, NumberField, SelectField, Segmented, Sheet, TextField, Toggle } from '../ui/components';
+import { WEEKDAYS, money, ordinal, weekdayDate } from '../ui/format';
 
 /** Shared sheet chrome for create/edit forms: Save, and Delete when editing. */
 function EditFrame({ title, canSave = true, onSave, onDelete, children }: { title: string; canSave?: boolean; onSave: () => void; onDelete?: () => void; children: ReactNode }) {
@@ -272,13 +272,59 @@ export function IncomeSheet({ id }: { id?: string }) {
         k === 'weekly' ? { kind: 'weekly', weekday: 5 } : k === 'biweekly' ? { kind: 'biweekly', anchorDate: x.today } : k === 'semimonthly' ? { kind: 'semimonthly', days: [15, 30] } : { kind: 'monthly', day: 1 },
     });
 
+  const h = s.hourly;
+  const setHourly = (patch: Partial<HourlyPay>) => h && set({ hourly: { ...h, ...patch } });
+  const usualTakeHome = h ? hourlyTakeHome(h, h.usualHours) : null;
+  // Save the usual estimate as the fallback amount, so anything reading `amount` stays sensible.
+  const save = () => update((d) => upsert(d, 'incomes', h ? { ...s, amount: usualTakeHome! } : { ...s, hourly: undefined }));
+
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a paycheck'} canSave={s.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'incomes', s))} onDelete={existing ? () => update((d) => remove(d, 'incomes', existing.id)) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a paycheck'} canSave={s.name.trim() !== ''} onSave={save} onDelete={existing ? () => update((d) => remove(d, 'incomes', existing.id)) : undefined}>
       <div className="form-grid">
         <div className="full">
           <TextField label="Name" value={s.name} onChange={(name) => set({ name })} placeholder="e.g. Sam's paycheck" />
         </div>
-        <MoneyField label="Take-home per paycheck" value={s.amount} onChange={(amount) => set({ amount: amount ?? 0 })} />
+        <div className="full" style={{ marginBottom: 14 }}>
+          <Segmented
+            label="Pay type"
+            value={h ? 'hourly' : 'fixed'}
+            onChange={(v) =>
+              set(
+                v === 'hourly'
+                  ? { hourly: s.hourly ?? { rate: 0, usualHours: 40, takeHomePct: 80 }, confirmOnPayday: s.confirmOnPayday ?? true }
+                  : { hourly: undefined },
+              )
+            }
+            options={[
+              { value: 'fixed', label: 'Same every paycheck' },
+              { value: 'hourly', label: 'Hourly' },
+            ]}
+          />
+        </div>
+        {h ? (
+          <>
+            <MoneyField label="Hourly rate (before taxes)" value={h.rate} onChange={(rate) => setHourly({ rate: rate ?? 0 })} />
+            <NumberField label="Usual hours per paycheck" value={h.usualHours} min={0} max={200} onChange={(v) => setHourly({ usualHours: v ?? 0 })} />
+            <NumberField
+              label="Take-home %"
+              value={h.takeHomePct}
+              suffix="%"
+              min={0}
+              max={100}
+              onChange={(v) => setHourly({ takeHomePct: v ?? 0 })}
+              hint="What's left after taxes and deductions. Work it out from a paystub below."
+            />
+            <div className="field">
+              <label>At usual hours</label>
+              <div style={{ padding: '11px 0', fontWeight: 600 }}>≈ {money(usualTakeHome ?? 0)} take-home</div>
+            </div>
+            <div className="full">
+              <TakeHomeCalculator onUse={(pct) => setHourly({ takeHomePct: pct })} />
+            </div>
+          </>
+        ) : (
+          <MoneyField label="Take-home per paycheck" value={s.amount} onChange={(amount) => set({ amount: amount ?? 0 })} />
+        )}
         {owners.length > 0 ? <SelectField label="Whose" value={s.owner} options={owners} onChange={(owner) => set({ owner })} /> : <TextField label="Whose" value={s.owner} onChange={(owner) => set({ owner })} />}
         <SelectField<ScheduleKind>
           label="How often"
@@ -313,6 +359,72 @@ export function IncomeSheet({ id }: { id?: string }) {
         <NumberField label="Bank may post it early by" value={s.earlyDepositDays} suffix="days" min={0} max={5} step={1} onChange={(v) => set({ earlyDepositDays: v ?? 0 })} />
       </div>
       <Toggle label="Plan around this paycheck" hint="Pay periods run from one of these paychecks to the next. Usually the main paycheck." checked={s.anchorsPayPeriod} onChange={(anchorsPayPeriod) => set({ anchorsPayPeriod })} />
+      <Toggle
+        label="Confirm the amount after each payday"
+        hint="Flake asks what actually landed, so the plan uses the real number."
+        checked={s.confirmOnPayday ?? !!h}
+        onChange={(confirmOnPayday) => set({ confirmOnPayday })}
+      />
+    </EditFrame>
+  );
+}
+
+/** Take-home % from one paystub: net ÷ gross. */
+function TakeHomeCalculator({ onUse }: { onUse: (pct: number) => void }) {
+  const [gross, setGross] = useState<Cents | null>(null);
+  const [net, setNet] = useState<Cents | null>(null);
+  const pct = gross && net ? Math.round((net / gross) * 1000) / 10 : null;
+  return (
+    <div className="def-block">
+      <div className="label" style={{ marginBottom: 8 }}>
+        From a recent paystub
+      </div>
+      <div className="form-grid">
+        <MoneyField label="Gross pay" value={gross} allowEmpty onChange={setGross} />
+        <MoneyField label="Net (take-home)" value={net} allowEmpty onChange={setNet} />
+      </div>
+      <div className="row">
+        <span className="muted" style={{ fontSize: 13 }}>{pct !== null ? `Take-home is ${pct}% of gross` : 'Enter both to work out the %'}</span>
+        <button className="btn small ghost" disabled={pct === null || pct > 100} onClick={() => pct !== null && onUse(pct)}>
+          Use {pct ?? ''}%
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Hours for an upcoming paycheck, or the real amount for one that landed. */
+export function PaycheckSheet({ sourceId, payday, focus }: { sourceId: string; payday: string; focus: 'hours' | 'amount' }) {
+  const data = useData();
+  const update = useUpdate();
+  const ui = useUI();
+  const source = byId(data.incomes, sourceId);
+  const rec = paycheckRecord(data, sourceId, payday);
+  const [hours, setHours] = useState<number | null>(rec?.hours ?? null);
+  const [amount, setAmount] = useState<Cents | null>(rec?.amount ?? null);
+  if (!source) return null;
+  const estimate = source.hourly && hours !== null ? hourlyTakeHome(source.hourly, hours) : expectedPay(data, source).amount;
+  const first = source.owner === 'joint' ? source.name : source.owner;
+  return (
+    <EditFrame
+      title={`${source.name} · ${weekdayDate(payday)}`}
+      onSave={() => {
+        update((d) => recordPaycheck(d, { sourceId, payday, hours: source.hourly ? hours : undefined, amount }));
+        ui.toast(amount !== null ? `Saved: ${money(amount)} landed` : `Saved: ${hours} hours ≈ ${money(estimate)}`);
+      }}
+    >
+      {source.hourly && (
+        <>
+          <NumberField label={`${first}'s hours for this paycheck`} value={hours} allowEmpty min={0} max={200} onChange={setHours} placeholder={`Usually ${source.hourly.usualHours}`} hint="The week this paycheck pays for." />
+          <p className="muted" style={{ marginTop: -4 }}>
+            ≈ <b>{money(estimate)}</b> take-home
+            <span className="faint"> ({hours ?? source.hourly.usualHours} hrs × {money(source.hourly.rate)} × {source.hourly.takeHomePct}%)</span>
+          </p>
+        </>
+      )}
+      {(focus === 'amount' || payday <= today()) && (
+        <MoneyField label="What actually landed" value={amount} allowEmpty onChange={setAmount} hint="From the bank or the paystub. This replaces the estimate." placeholder={money(estimate).replace('$', '')} />
+      )}
     </EditFrame>
   );
 }
