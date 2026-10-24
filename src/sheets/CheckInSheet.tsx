@@ -197,7 +197,7 @@ export function CheckInSheet() {
             <span>{money(s.balance)}</span>
           </div>
           <div className="row">
-            <span className="muted">Bills, budgets, assigned and cushion</span>
+            <span className="muted">Bills, budgets, assigned, and kept in the bank</span>
             <span>{minus(s.balance - s.safe)}</span>
           </div>
         </div>

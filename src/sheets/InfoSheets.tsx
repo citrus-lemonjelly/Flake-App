@@ -45,7 +45,7 @@ export function MeaningSheet() {
               </div>
             )}
             <div className="row">
-              <span className="muted">Cushion</span>
+              <span className="muted">Kept in the bank</span>
               <span>{minus(s.buffer)}</span>
             </div>
             <div className="row total">
@@ -164,7 +164,7 @@ export function CushionSheet() {
   const [v, setV] = useState<number | null>(data.settings.cashBuffer);
   return (
     <Sheet
-      title="Cushion"
+      title="Keep in the bank"
       onClose={ui.close}
       footer={
         <button
@@ -179,9 +179,9 @@ export function CushionSheet() {
       }
     >
       <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
-        Money kept in checking for surprises. It's never counted as safe to spend.
+        The amount that always stays in checking. Flake never counts it as safe to spend.
       </p>
-      <MoneyField label="Keep in checking" value={v} onChange={setV} />
+      <MoneyField label="Always keep" value={v} onChange={setV} />
     </Sheet>
   );
 }

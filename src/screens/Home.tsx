@@ -176,7 +176,7 @@ function CashHero() {
           )}
           <div className="row">
             <span>
-              Cushion{' '}
+              Kept in the bank{' '}
               <button className="link" onClick={() => ui.open(<CushionSheet />)}>
                 Change
               </button>
@@ -189,7 +189,12 @@ function CashHero() {
           </div>
         </div>
       )}
-      <div className="status">{status}</div>
+      <div className="status">
+        {status} · keeps {money(s.buffer, true)} in the bank{" "}
+        <button className="link" onClick={() => ui.open(<CushionSheet />)}>
+          Change
+        </button>
+      </div>
       <div className="hero-btns">
         <button className="btn white" onClick={() => ui.open(<CheckInSheet />)}>
           Check in

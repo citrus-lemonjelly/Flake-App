@@ -235,7 +235,7 @@ export interface Settings {
   customOrder: Id[];
   /** Extra money per month aimed at debt on top of minimums. */
   monthlyExtraForDebt: Cents;
-  /** Cushion kept in checking that is never counted as safe to assign. */
+  /** Money always kept in the bank (a floor); never counted as safe to spend. */
   cashBuffer: Cents;
   /** Rates assumed for debts whose APR has not been entered yet. */
   assumedApr: Partial<Record<DebtKind, number>>;

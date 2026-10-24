@@ -94,7 +94,7 @@ export function Settings() {
             <TextField label="People" hint="Comma-separated. The first name is used in greetings." value={data.household.people.join(', ')} onChange={(v) => setHousehold({ people: v.split(',').map((s) => s.trim()).filter(Boolean) })} />
             <div className="form-grid">
               <SelectField label="Weekly budgets reset on" value={String(data.household.weekStartsOn)} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} onChange={(v) => setHousehold({ weekStartsOn: Number(v) })} />
-              <MoneyField label="Cushion in checking" hint="Never counted as safe to spend." value={data.settings.cashBuffer} onChange={(c) => set({ cashBuffer: c ?? 0 })} />
+              <MoneyField label="Always keep in the bank" hint="This much stays in checking and is never counted as safe to spend." value={data.settings.cashBuffer} onChange={(c) => set({ cashBuffer: c ?? 0 })} />
               <NumberField label="Assumed card rate" hint="Used until a card's real rate is entered." value={data.settings.assumedApr['credit-card'] ?? 24} suffix="%" min={0} max={100} onChange={(v) => set({ assumedApr: { ...data.settings.assumedApr, 'credit-card': v ?? 24 } })} />
             </div>
           </div>
