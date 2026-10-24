@@ -200,6 +200,9 @@ export interface Milestone extends Entity {
 
 export type Strategy = 'avalanche' | 'snowball' | 'custom';
 
+export const PALETTE_IDS = ['ocean', 'ember', 'forest', 'rose', 'graphite', 'violet'] as const;
+export type PaletteId = (typeof PALETTE_IDS)[number];
+
 export interface Settings {
   strategy: Strategy;
   /** Debt ids, highest priority first, used when strategy is 'custom'. */
@@ -211,6 +214,10 @@ export interface Settings {
   /** Rates assumed for debts whose APR has not been entered yet. */
   assumedApr: Partial<Record<DebtKind, number>>;
   theme: 'system' | 'light' | 'dark';
+  /** Accent color scheme. */
+  palette: PaletteId;
+  /** Show the estimated debt-free card on Home. */
+  showDebtOnHome: boolean;
 }
 
 export interface Household {

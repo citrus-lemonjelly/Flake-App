@@ -11,6 +11,13 @@ describe('storage', () => {
     expect(importJson(exportJson(data))).toEqual(data);
   });
 
+  it('fills in the color scheme for backups made before it existed', () => {
+    const data = sampleData();
+    const { palette: _drop, ...oldSettings } = data.settings;
+    const imported = importJson(JSON.stringify({ ...data, settings: oldSettings }));
+    expect(imported.settings.palette).toBe('ocean');
+  });
+
   it('rejects files that are not Flake backups', () => {
     expect(() => importJson('{"hello":1}')).toThrow(/not a Flake backup/);
     expect(() => importJson('nope')).toThrow(/not valid JSON/);

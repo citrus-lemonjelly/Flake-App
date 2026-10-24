@@ -63,18 +63,32 @@ export function logDebtPayment(
   if (!debt) throw new Error(`Unknown debt ${p.debtId}`);
   let next = upsert(data, 'debtPayments', entity({ ...p, note: p.note ?? '' }));
   if (debt.balance !== null) next = patch(next, 'debts', debt.id, { balance: Math.max(0, debt.balance - p.amount) });
-  return next;
+  return recordPayoffs(next, p.date);
 }
 
 /** Statement arrived: set the true balance (interest included). */
 export function setDebtBalance(data: AppData, debtId: Id, balance: Cents, asOf: ISODate): AppData {
   const debt = byId(data.debts, debtId);
   if (!debt) throw new Error(`Unknown debt ${debtId}`);
-  return patch(data, 'debts', debtId, {
+  const next = patch(data, 'debts', debtId, {
     balance,
     balanceAsOf: asOf,
     originalBalance: debt.originalBalance ?? debt.balance ?? balance,
   });
+  return recordPayoffs(next, asOf);
+}
+
+/**
+ * Stamp "paid off" milestones with the real date once a balance actually hits $0.
+ * Projections never set achievedOn; only real balances do.
+ */
+function recordPayoffs(data: AppData, date: ISODate): AppData {
+  const paid = new Set(data.debts.filter((d) => !d.deletedAt && d.balance === 0).map((d) => d.id));
+  let next = data;
+  for (const m of data.milestones)
+    if (!m.deletedAt && !m.achievedOn && m.rule.type === 'debt-paid' && paid.has(m.rule.debtId))
+      next = patch(next, 'milestones', m.id, { achievedOn: date });
+  return next;
 }
 
 /** Mark a planned assignment done: pays the debt, fills the fund, or tops up the envelope. */

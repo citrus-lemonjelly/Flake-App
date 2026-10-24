@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SCHEMA_VERSION, type AppData } from './types';
+import { PALETTE_IDS, SCHEMA_VERSION, type AppData } from './types';
 
 /** Runtime validation for imported files and anything read back from storage. */
 
@@ -48,6 +48,9 @@ export const appDataSchema = z.object({
     cashBuffer: cents,
     assumedApr: z.partialRecord(debtKind, z.number()),
     theme: z.enum(['system', 'light', 'dark']),
+    // Added after v1 shipped; older backups get the defaults.
+    palette: z.enum(PALETTE_IDS).default('ocean'),
+    showDebtOnHome: z.boolean().default(true),
   }),
   incomes: z.array(
     z.object({

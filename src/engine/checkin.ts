@@ -1,5 +1,5 @@
 import type { AppData, BalanceCheckIn, Cents, ISODate } from '../model/types';
-import { addDays, addMonths, clampedDay, makeDate, yearMonth } from './dates';
+import { addDays, addMonths, clampedDay, daysBetween, makeDate, yearMonth } from './dates';
 import { live } from './live';
 import { sum } from './money';
 import { allPaydays, periodContaining } from './payCalendar';
@@ -95,6 +95,50 @@ export function reconcile(data: AppData, checkIn: BalanceCheckIn): Reconciliatio
   };
   const expected = prev.balance + r.income + r.bonuses - r.bills - r.spending - r.extraPayments - r.transfersToFunds;
   return { ...r, expected, difference: checkIn.balance - expected };
+}
+
+export interface BalanceEstimate {
+  balance: Cents;
+  from: BalanceCheckIn;
+  /** Budget money assumed spent in finished pay periods even though it wasn't logged. */
+  unloggedBudgets: Cents;
+}
+
+/**
+ * Today's bank balance projected from the last check-in, erring low: on top of
+ * the reconciliation math, spending budgets from pay periods that already ended
+ * count as spent (pro-rated to the days since the check-in) unless logging
+ * shows otherwise. The current period's budgets are left to safeToAssign.
+ */
+export function estimateBalance(data: AppData, date: ISODate): BalanceEstimate | null {
+  const last = live(data.checkIns)
+    .filter((c) => c.date <= date)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.updatedAt.localeCompare(b.updatedAt))
+    .pop();
+  if (!last) return null;
+  if (last.date >= date) return { balance: last.balance, from: last, unloggedBudgets: 0 };
+
+  const probe: BalanceCheckIn = { id: 'probe', updatedAt: '9999', date, balance: 0, note: '' };
+  const expected = reconcile(data, probe).expected ?? last.balance;
+  const windowStart = addDays(last.date, 1);
+  const currentStart = periodContaining(data, date).start;
+
+  let unlogged = 0;
+  for (const plan of planPeriods(data, windowStart, 12)) {
+    const { start, end } = plan.period;
+    if (start >= currentStart) break;
+    const from = start > windowStart ? start : windowStart;
+    const share = (daysBetween(from, end) + 1) / (daysBetween(start, end) + 1);
+    for (const line of plan.lines.filter((l) => l.kind === 'category')) {
+      const logged = sum(
+        live(data.spending)
+          .filter((s) => s.categoryId === line.refId && s.date >= from && s.date <= end)
+          .map((s) => s.amount),
+      );
+      unlogged += Math.max(0, Math.round(line.amount * share) - logged);
+    }
+  }
+  return { balance: expected - unlogged, from: last, unloggedBudgets: unlogged };
 }
 
 export interface SafeToAssign {

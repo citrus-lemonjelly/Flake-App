@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { sampleData } from '../data/sample';
 import { emptyData, entity } from '../model/factory';
 import type { AppData, Bill, Category, Fund, IncomeSource } from '../model/types';
-import { logBonus, checkIn, completeAllocation, logSpending, planAllocation } from '../store/actions';
+import { logBonus, checkIn, completeAllocation, logDebtPayment, logSpending, planAllocation } from '../store/actions';
 import { monthlyAverages, planPeriods } from './budget';
-import { reconcile, safeToAssign } from './checkin';
+import { estimateBalance, reconcile, safeToAssign } from './checkin';
 import { live } from './live';
 
 function simple(): AppData {
@@ -91,6 +91,19 @@ describe('check-ins', () => {
     expect(r.difference).toBe(-12_300);
   });
 
+  it('estimates the balance between check-ins conservatively', () => {
+    let data = simple();
+    data = checkIn(data, { date: '2026-11-01', balance: 300_000 }).data;
+    data = logSpending(data, { date: '2026-11-03', amount: 12_000, categoryId: data.categories[0]!.id });
+    const est = estimateBalance(data, '2026-11-20')!;
+    // Reconciled: 300k + Nov 16 pay 200k − Phone (due 20th) 8k − logged 12k = 480k.
+    // The Nov 1–15 period ended: its $300 grocery budget, pro-rated to Nov 2–15 (14/15 days) = $280,
+    // minus $120 logged → $160 assumed spent without being logged.
+    expect(est.unloggedBudgets).toBe(16_000);
+    expect(est.balance).toBe(480_000 - 16_000);
+    expect(estimateBalance(data, '2026-11-01')!.balance).toBe(300_000);
+  });
+
   it('safe-to-assign keeps upcoming bills, unspent budgets and the buffer', () => {
     const data = simple();
     data.settings.cashBuffer = 10_000;
@@ -98,6 +111,16 @@ describe('check-ins', () => {
     expect(s.upcoming.map((u) => u.name)).toEqual(['Phone']);
     expect(s.remainingBudgets).toBe(30_000); // Thursdays Nov 19 and 26
     expect(s.safe).toBe(250_000 - 8_000 - 30_000 - 10_000);
+  });
+
+  it('marks a paid-off milestone only when the real balance reaches zero', () => {
+    let data = sampleData();
+    const store = live(data.debts).find((d) => d.name === 'Store Card')!;
+    const ms = () => live(data.milestones).find((m) => m.rule.type === 'debt-paid' && m.rule.debtId === store.id)!;
+    data = logDebtPayment(data, { debtId: store.id, date: '2026-11-05', amount: 50_000, kind: 'extra' });
+    expect(ms().achievedOn).toBeUndefined();
+    data = logDebtPayment(data, { debtId: store.id, date: '2026-11-20', amount: 46_000, kind: 'extra' });
+    expect(ms().achievedOn).toBe('2026-11-20');
   });
 
   it('completing a debt allocation lowers the balance and logs an extra payment', () => {

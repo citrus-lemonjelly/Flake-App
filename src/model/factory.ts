@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS: Settings = {
   cashBuffer: 10000,
   assumedApr: {},
   theme: 'system',
+  palette: 'ocean',
+  showDebtOnHome: true,
 };
 
 export function emptyData(): AppData {

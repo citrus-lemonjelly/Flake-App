@@ -1,0 +1,199 @@
+import { useRef } from 'react';
+import { live, paychecksPerYear } from '../engine';
+import { emptyData } from '../model/factory';
+import type { Settings as SettingsT } from '../model/types';
+import { sampleData } from '../data/sample';
+import { exportJson, importJson } from '../store/storage';
+import { updateSettings } from '../store/actions';
+import { useData, useStore, useUpdate } from '../state/store';
+import { useUI } from '../state/ui';
+import { MoneyField, NumberField, SelectField, Segmented, TextField, Toggle } from '../ui/components';
+import { WEEKDAYS, money, ordinal } from '../ui/format';
+import { PALETTES } from '../theme/palettes';
+import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
+
+const CADENCE = { weekly: 'week', 'per-period': 'paycheck', monthly: 'month' };
+
+export function Settings() {
+  const data = useData();
+  const update = useUpdate();
+  const store = useStore();
+  const ui = useUI();
+  const file = useRef<HTMLInputElement>(null);
+  const set = (fields: Partial<SettingsT>) => update((d) => updateSettings(d, fields));
+  const setHousehold = (fields: Partial<typeof data.household>) => update((d) => ({ ...d, household: { ...d.household, ...fields } }));
+
+  const scheduleText = (s: (typeof data.incomes)[number]['schedule']) =>
+    s.kind === 'weekly' ? `Every ${WEEKDAYS[s.weekday]}` : s.kind === 'biweekly' ? 'Every other week' : s.kind === 'semimonthly' ? `The ${ordinal(s.days[0])} & ${ordinal(s.days[1])}` : `The ${ordinal(s.day)}`;
+
+  const download = () => {
+    const blob = new Blob([exportJson(data)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `flake-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  return (
+    <>
+      <header className="page-head">
+        <div>
+          <h1>Settings</h1>
+          <div className="sub">Look, household, paychecks, bills and backups</div>
+        </div>
+      </header>
+
+      <div className="settings-grid">
+        <div className="stack">
+          <div className="card">
+            <h3>Appearance</h3>
+            <div className="swatches" role="radiogroup" aria-label="Color scheme">
+              {PALETTES.map((p) => (
+                <button key={p.id} className="swatch" role="radio" aria-checked={data.settings.palette === p.id} onClick={() => set({ palette: p.id })}>
+                  <i style={{ background: `linear-gradient(135deg, ${p.gradient.join(', ')})` }} />
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <Segmented
+                label="Light or dark"
+                value={data.settings.theme}
+                onChange={(theme) => set({ theme })}
+                options={[
+                  { value: 'system', label: 'Match device' },
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' },
+                ]}
+              />
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <Toggle label="Show the debt-free estimate on Home" hint="Turn off to keep Home to cash and bills. Debts still shows it." checked={data.settings.showDebtOnHome} onChange={(showDebtOnHome) => set({ showDebtOnHome })} />
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Household</h3>
+            <TextField label="People" hint="Comma-separated. The first name is used in greetings." value={data.household.people.join(', ')} onChange={(v) => setHousehold({ people: v.split(',').map((s) => s.trim()).filter(Boolean) })} />
+            <div className="form-grid">
+              <SelectField label="Weekly budgets reset on" value={String(data.household.weekStartsOn)} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} onChange={(v) => setHousehold({ weekStartsOn: Number(v) })} />
+              <MoneyField label="Cushion in checking" hint="Never counted as safe to spend." value={data.settings.cashBuffer} onChange={(c) => set({ cashBuffer: c ?? 0 })} />
+              <NumberField label="Assumed card rate" hint="Used until a card's real rate is entered." value={data.settings.assumedApr['credit-card'] ?? 24} suffix="%" min={0} max={100} onChange={(v) => set({ assumedApr: { ...data.settings.assumedApr, 'credit-card': v ?? 24 } })} />
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Backup & data</h3>
+            <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+              Everything is saved on this device. Download a backup now and then; syncing between phone and PC comes next.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn small" onClick={download}>
+                Download backup
+              </button>
+              <button className="btn small ghost" onClick={() => file.current?.click()}>
+                Import backup
+              </button>
+              <button
+                className="btn small ghost"
+                onClick={() => {
+                  if (confirm('Replace everything with demo data? Download a backup first if you want to keep yours.')) store.replace(sampleData());
+                }}
+              >
+                Load demo data
+              </button>
+              <button
+                className="btn small danger"
+                onClick={() => {
+                  if (confirm('Erase everything on this device? This cannot be undone.')) store.replace(emptyData());
+                }}
+              >
+                Erase everything
+              </button>
+            </div>
+            <input
+              ref={file}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f) return;
+                try {
+                  const next = importJson(await f.text());
+                  if (confirm('Replace everything on this device with this backup?')) {
+                    store.replace(next);
+                    ui.toast('Backup imported.');
+                  }
+                } catch (err) {
+                  ui.toast(err instanceof Error ? err.message : 'Could not import that file.');
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="stack">
+          <ListCard
+            title="Paychecks"
+            onAdd={() => ui.open(<IncomeSheet />)}
+            rows={live(data.incomes).map((s) => ({
+              id: s.id,
+              name: s.name + (s.anchorsPayPeriod ? ' ★' : ''),
+              sub: `${scheduleText(s.schedule)} · ≈ ${money(Math.round((s.amount * paychecksPerYear(s.schedule)) / 12), true)}/mo`,
+              amount: money(s.amount),
+              open: () => ui.open(<IncomeSheet id={s.id} />),
+            }))}
+            empty="Add each paycheck that comes into the household."
+          />
+          <ListCard
+            title="Bills"
+            onAdd={() => ui.open(<BillSheet />)}
+            rows={live(data.bills)
+              .sort((a, b) => a.dueDay - b.dueDay)
+              .map((b) => ({ id: b.id, name: b.name, sub: `Due the ${ordinal(b.dueDay)}${b.funding === 'split' ? ' · split' : ''}`, amount: money(b.amount), open: () => ui.open(<BillSheet id={b.id} />) }))}
+            empty="Utilities, phone, insurance… Debt payments live under Debts."
+          />
+          <ListCard
+            title="Spending budgets"
+            onAdd={() => ui.open(<CategorySheet />)}
+            rows={live(data.categories).map((c) => ({ id: c.id, name: c.name, sub: `per ${CADENCE[c.cadence]}`, amount: money(c.amount), open: () => ui.open(<CategorySheet id={c.id} />) }))}
+            empty="Groceries, gas, fun money…"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ListCard({ title, rows, onAdd, empty }: { title: string; rows: { id: string; name: string; sub: string; amount: string; open: () => void }[]; onAdd: () => void; empty: string }) {
+  return (
+    <div className="card">
+      <h3>
+        {title}
+        <button className="link" onClick={onAdd}>
+          + Add
+        </button>
+      </h3>
+      {rows.length ? (
+        <ul className="list">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <button className="rowbtn" onClick={r.open}>
+                <div className="grow">
+                  {r.name}
+                  <div className="sub">{r.sub}</div>
+                </div>
+                <span>{r.amount}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="empty">{empty}</div>
+      )}
+    </div>
+  );
+}
