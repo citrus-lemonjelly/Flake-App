@@ -21,7 +21,7 @@ import { syncLabel, useSyncStatus } from './state/sync';
 
 const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
   { route: 'home', label: 'Home', desk: 'Dashboard', icon: 'home' },
-  { route: 'plan', label: 'Plan', desk: 'Paycheck plan', icon: 'plan' },
+  { route: 'plan', label: 'Plan', desk: 'Plan', icon: 'plan' },
   { route: 'debts', label: 'Debts', desk: 'Debts & house', icon: 'debts' },
   { route: 'goals', label: 'Goals', desk: 'Goals & savings', icon: 'goals' },
   { route: 'settings', label: 'Settings', desk: 'Settings', icon: 'settings' },

@@ -3,7 +3,7 @@ import { sampleData } from '../data/sample';
 import { emptyData, entity } from '../model/factory';
 import type { AppData, Bill, Category, Fund, IncomeSource } from '../model/types';
 import { logBonus, checkIn, completeAllocation, logDebtPayment, logSpending, planAllocation } from '../store/actions';
-import { monthlyAverages, planPeriods } from './budget';
+import { monthRanges, monthlyAverages, planPeriods, planRange, weekRanges } from './budget';
 import { estimateBalance, reconcile, safeToAssign } from './checkin';
 import { live } from './live';
 
@@ -73,6 +73,39 @@ describe('pay period plan', () => {
     data = planAllocation(data, { periodStart: p!.period.start, target: { type: 'debt', id: debt.id }, amount: 30_000 });
     const [after] = planPeriods(data, '2026-11-02', 1);
     expect(after!.unassigned).toBe(p!.unassigned - 30_000);
+  });
+});
+
+describe('week and month views', () => {
+  it('a month shows real due dates and full amounts', () => {
+    const m = planRange(simple(), '2026-11-01', '2026-11-30');
+    expect(m.incomeTotal).toBe(400_000); // Nov 1 and Nov 16
+    expect(m.lines.find((l) => l.name === 'Rent')).toMatchObject({ amount: 150_001, dueDate: '2026-11-01' }); // whole, not split
+    expect(m.lines.find((l) => l.name === 'Phone')).toMatchObject({ amount: 8_000, dueDate: '2026-11-20' });
+    expect(m.lines.find((l) => l.name === 'Groceries')!.amount).toBe(60_000); // Thursdays 5, 12, 19, 26
+    expect(m.net).toBe(400_000 - 150_001 - 8_000 - 60_000);
+  });
+
+  it('a week without a paycheck can go negative', () => {
+    const [w] = weekRanges(simple(), '2026-11-20', 1);
+    expect(w).toEqual({ start: '2026-11-19', end: '2026-11-25' }); // Thursday to Wednesday
+    const p = planRange(simple(), w!.start, w!.end);
+    expect(p.incomeTotal).toBe(0);
+    expect(p.net).toBe(-8_000 - 15_000);
+  });
+
+  it('assignments show in the week and month their paycheck starts', () => {
+    const data = planAllocation(simple(), { periodStart: '2026-11-16', target: { type: 'fund', id: 'x' }, amount: 5_000 });
+    expect(planRange(data, '2026-11-12', '2026-11-18').allocatedTotal).toBe(5_000);
+    expect(planRange(data, '2026-11-19', '2026-11-25').allocatedTotal).toBe(0);
+    expect(planRange(data, '2026-11-01', '2026-11-30').allocatedTotal).toBe(5_000);
+  });
+
+  it('months run calendar month to calendar month', () => {
+    expect(monthRanges('2026-11-20', 2)).toEqual([
+      { start: '2026-11-01', end: '2026-11-30' },
+      { start: '2026-12-01', end: '2026-12-31' },
+    ]);
   });
 });
 

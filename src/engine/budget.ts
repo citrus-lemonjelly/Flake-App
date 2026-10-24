@@ -1,8 +1,8 @@
 import type { Allocation, AppData, Cents, Debt, Funding, Id, ISODate } from '../model/types';
-import { addMonths, clampedDay, daysBetween, makeDate, monthKey, weekday, yearMonth } from './dates';
+import { addDays, addMonths, clampedDay, daysBetween, makeDate, monthKey, weekday, yearMonth } from './dates';
 import { live } from './live';
 import { splitEvenly, sum } from './money';
-import { payPeriods, paychecksPerYear, periodStartsInMonth, type PayPeriod, type Payday } from './payCalendar';
+import { allPaydays, payPeriods, paychecksPerYear, periodStartsInMonth, type PayPeriod, type Payday } from './payCalendar';
 
 export type PlanLineKind = 'bill' | 'debt' | 'category' | 'fund';
 
@@ -195,4 +195,95 @@ export function extraPaycheckMonths(data: AppData, from: ISODate, months: number
       if (c.sourceId === s.id && c.count > typical && c.month >= monthKey(from) && c.month < endMonth) out.push(c);
   }
   return out.sort((a, b) => a.month.localeCompare(b.month));
+}
+
+// ---------------------------------------------------------------------------
+// Calendar views: a week or a month by actual dates
+// ---------------------------------------------------------------------------
+
+export interface DateRange {
+  start: ISODate;
+  end: ISODate; // inclusive
+}
+
+/**
+ * A plan for any date range, by actual dates rather than by paycheck:
+ * every paycheck that lands in it, every bill and debt payment due in it
+ * (in full, even ones the paycheck view splits), weekly budgets per budget
+ * day in it, and other budgets, set-asides and assignments from the
+ * paychecks that start in it.
+ */
+export interface RangePlan extends DateRange {
+  income: Payday[];
+  incomeTotal: Cents;
+  lines: PlanLine[];
+  outflowTotal: Cents;
+  /** Income minus everything going out. Negative weeks are normal between paychecks. */
+  net: Cents;
+  allocations: Allocation[];
+  allocatedTotal: Cents;
+}
+
+export function planRange(data: AppData, start: ISODate, end: ISODate): RangePlan {
+  const income = allPaydays(data, start, end);
+  const lines: PlanLine[] = [];
+
+  const due = (name: string, refId: Id, kind: 'bill' | 'debt', amount: Cents, dueDay: number) => {
+    const { year, month1 } = yearMonth(start);
+    for (let m = makeDate(year, month1, 1); m <= end; m = addMonths(m, 1)) {
+      const ym = yearMonth(m);
+      const d = clampedDay(ym.year, ym.month1, dueDay);
+      if (d >= start && d <= end) lines.push({ kind, refId, name, amount, dueDate: d });
+    }
+  };
+  for (const b of live(data.bills)) due(b.name, b.id, 'bill', b.amount, b.dueDay);
+  for (const d of live(data.debts)) {
+    const pay = debtMonthlyPayment(d);
+    if (d.balance !== 0 && pay > 0 && d.dueDay !== null) due(d.name, d.id, 'debt', pay, d.dueDay);
+  }
+  lines.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+
+  // Budgets, set-asides and assignments that belong to paychecks starting in this range.
+  const paychecks = planPeriods(data, start, Math.ceil((daysBetween(start, end) + 1) / 7) + 2).filter((p) => p.period.start >= start && p.period.start <= end);
+  for (const c of live(data.categories)) {
+    const amount =
+      c.cadence === 'weekly'
+        ? c.amount * countWeekday(start, end, data.household.weekStartsOn)
+        : sum(paychecks.flatMap((p) => p.lines.filter((l) => l.kind === 'category' && l.refId === c.id).map((l) => l.amount)));
+    if (amount > 0) lines.push({ kind: 'category', refId: c.id, name: c.name, amount });
+  }
+  const funds = new Map<Id, PlanLine>();
+  for (const l of paychecks.flatMap((p) => p.lines.filter((x) => x.kind === 'fund'))) {
+    const cur = funds.get(l.refId);
+    funds.set(l.refId, cur ? { ...cur, amount: cur.amount + l.amount } : { ...l });
+  }
+  lines.push(...funds.values());
+
+  const allocations = live(data.allocations).filter((a) => a.periodStart >= start && a.periodStart <= end);
+  const incomeTotal = sum(income.map((p) => p.amount));
+  const outflowTotal = sum(lines.map((l) => l.amount));
+  return {
+    start,
+    end,
+    income,
+    incomeTotal,
+    lines,
+    outflowTotal,
+    net: incomeTotal - outflowTotal,
+    allocations,
+    allocatedTotal: sum(allocations.map((a) => a.amount)),
+  };
+}
+
+/** `count` weeks starting on the household's budget day, the first containing `from`. */
+export function weekRanges(data: AppData, from: ISODate, count: number): DateRange[] {
+  const first = addDays(from, -((weekday(from) - data.household.weekStartsOn + 7) % 7));
+  return Array.from({ length: count }, (_, i) => ({ start: addDays(first, i * 7), end: addDays(first, i * 7 + 6) }));
+}
+
+/** `count` calendar months, the first containing `from`. */
+export function monthRanges(from: ISODate, count: number): DateRange[] {
+  const { year, month1 } = yearMonth(from);
+  const first = makeDate(year, month1, 1);
+  return Array.from({ length: count }, (_, i) => ({ start: addMonths(first, i), end: addDays(addMonths(first, i + 1), -1) }));
 }
