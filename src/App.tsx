@@ -3,11 +3,13 @@ import { sampleData } from './data/sample';
 import { live, today } from './engine';
 import { entity } from './model/factory';
 import type { IncomeSource } from './model/types';
-import { replaceEverything, upsert } from './store/actions';
+import { replaceEverything, updateSettings, upsert } from './store/actions';
 import { importJson } from './store/storage';
-import { useData, useStore, useThemeSync } from './state/store';
+import { useData, useStore, useThemeSync, useUpdate } from './state/store';
 import { UIProvider, useUI, type Route } from './state/ui';
 import { Icon, type IconName } from './ui/icons';
+import { Segmented } from './ui/components';
+import { PALETTES } from './theme/palettes';
 import { Home } from './screens/Home';
 import { Plan } from './screens/Plan';
 import { Debts } from './screens/Debts';
@@ -97,9 +99,12 @@ function Shell() {
         <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => ui.open(<CheckInSheet />)}>
           <Icon name="bank" size={18} /> Check in
         </button>
-        <button className="foot link" style={{ textAlign: 'left', color: 'var(--ink3)', fontWeight: 500 }} onClick={() => ui.open(<SyncSheet />)}>
-          {syncLabel(syncStatus)}
-        </button>
+        <div className="side-bottom">
+          <ThemeQuick />
+          <button className="foot link" style={{ textAlign: 'left', color: 'var(--ink3)', fontWeight: 500 }} onClick={() => ui.open(<SyncSheet />)}>
+            {syncLabel(syncStatus)}
+          </button>
+        </div>
       </aside>
       <main className="main">{screen}</main>
       <nav className="tabbar" aria-label="Main">
@@ -115,6 +120,40 @@ function Shell() {
           <TabButton key={n.route} {...n} />
         ))}
       </nav>
+    </div>
+  );
+}
+
+/** Color scheme and light/dark, one click away in the desktop sidebar. */
+function ThemeQuick() {
+  const { settings } = useData();
+  const update = useUpdate();
+  const set = (fields: Partial<typeof settings>) => update((d) => updateSettings(d, fields));
+  return (
+    <div className="theme-quick">
+      <div className="dots" role="radiogroup" aria-label="Color scheme">
+        {PALETTES.map((p) => (
+          <button
+            key={p.id}
+            role="radio"
+            aria-checked={settings.palette === p.id}
+            aria-label={p.name}
+            title={p.name}
+            style={{ background: `linear-gradient(135deg, ${p.gradient.join(', ')})` }}
+            onClick={() => set({ palette: p.id })}
+          />
+        ))}
+      </div>
+      <Segmented
+        label="Light or dark"
+        value={settings.theme}
+        onChange={(theme) => set({ theme })}
+        options={[
+          { value: 'system', label: 'Auto' },
+          { value: 'light', label: 'Light' },
+          { value: 'dark', label: 'Dark' },
+        ]}
+      />
     </div>
   );
 }

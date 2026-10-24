@@ -91,7 +91,13 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
   .side button.nav { border: 0; background: none; display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: var(--r-sm); color: var(--ink2); font-weight: 500; text-align: left; }
   .side button.nav[aria-current='page'] { background: var(--accent-soft); color: var(--accent); }
   .side .cta { margin-top: 14px; }
-  .side .foot { margin-top: auto; font-size: 12px; color: var(--ink3); padding: 10px; }
+  .side .side-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .side .foot { font-size: 12px; color: var(--ink3); padding: 6px 10px 0; }
+  .theme-quick { border-top: 1px solid var(--line); padding: 14px 6px 4px; display: flex; flex-direction: column; gap: 10px; }
+  .theme-quick .dots { display: flex; justify-content: space-between; padding: 0 4px; }
+  .theme-quick .dots button { width: 24px; height: 24px; border-radius: 50%; border: 0; padding: 0; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px transparent; transition: box-shadow 0.15s; }
+  .theme-quick .dots button[aria-checked='true'] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+  .theme-quick .segmented button { padding: 6px 4px; font-size: 12px; }
   .main { max-width: 1240px; padding: 28px 32px 48px; }
 }
 
