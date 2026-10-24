@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { emptyData, entity } from '../model/factory';
 import type { AppData, Bill, Category, IncomeSource, PaidOn } from '../model/types';
 import { checkIn, logSpending, recordBillPayment, updateSettings } from '../store/actions';
-import { explainGap, safeToAssign } from './checkin';
+import { estimateBalance, explainGap, safeToAssign } from './checkin';
 import { outflowsBetween } from './outflows';
 
 /** Paid on the 1st and 16th; Rent due the 1st, Phone due the 20th; $150 groceries every Thursday. */
@@ -77,11 +77,43 @@ describe('explaining a check-in gap', () => {
 });
 
 describe('safe to spend', () => {
-  it('counts unsorted spending against the budgets once, not twice', () => {
+  it('counts spending worked out at a check-in against the budgets once, not twice', () => {
     let data = household('due-date');
     expect(safeToAssign(data, '2026-11-17', 300_000).remainingBudgets).toBe(30_000); // Thursdays 19 and 26
-    data = logSpending(data, { date: '2026-11-17', amount: 12_000, categoryId: null, note: 'From check-in' });
+    data = logSpending(data, { date: '2026-11-17', amount: 12_000, categoryId: null, note: 'From check-in', inferred: true });
     expect(safeToAssign(data, '2026-11-17', 300_000).remainingBudgets).toBe(18_000);
+  });
+
+  it('an "Other" purchase is not budget money', () => {
+    const data = logSpending(household('due-date'), { date: '2026-11-17', amount: 12_000, categoryId: null, note: 'New shoes' });
+    expect(safeToAssign(data, '2026-11-17', 300_000).remainingBudgets).toBe(30_000);
+  });
+});
+
+describe('purchases logged after a same-day check-in', () => {
+  const afterCheckIn = () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-17T09:00:00Z'));
+    const data = checkIn(household('due-date'), { date: '2026-11-17', balance: 300_000 }).data;
+    vi.setSystemTime(new Date('2026-11-17T18:00:00Z')); // later that day
+    return data;
+  };
+  const safeToday = (d: AppData) => safeToAssign(d, '2026-11-17', estimateBalance(d, '2026-11-17')!.balance).safe;
+
+  it('a groceries purchase leaves Safe to spend unchanged (it was already set aside)', () => {
+    const data = afterCheckIn();
+    const before = safeToday(data);
+    const after = logSpending(data, { date: '2026-11-17', amount: 5_000, categoryId: data.categories[0]!.id });
+    expect(estimateBalance(after, '2026-11-17')!.balance).toBe(295_000);
+    expect(safeToday(after)).toBe(before);
+    vi.useRealTimers();
+  });
+
+  it('an "Other" purchase lowers Safe to spend', () => {
+    const data = afterCheckIn();
+    const before = safeToday(data);
+    expect(safeToday(logSpending(data, { date: '2026-11-17', amount: 5_000, categoryId: null }))).toBe(before - 5_000);
+    vi.useRealTimers();
   });
 
   it("holds back today's bills that a check-in said haven't gone out", () => {

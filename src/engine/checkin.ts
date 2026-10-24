@@ -43,26 +43,29 @@ export function reconcile(data: AppData, checkIn: BalanceCheckIn): Reconciliatio
   };
   if (!prev) return { ...base, expected: null, difference: null };
 
-  // Window is (prev.date, checkIn.date].
+  // Scheduled items (paychecks, bills) count in (prev.date, checkIn.date]. Logged items also count
+  // when dated the day of the previous check-in but entered after it (a purchase logged later that day),
+  // and don't count when entered after this check-in on its own day.
   const from = addDays(prev.date, 1);
   const to = checkIn.date;
-  const inWindow = (d: ISODate) => d >= from && d <= to;
+  const inWindow = (d: ISODate, stamp: string) =>
+    (d > prev.date || (d === prev.date && stamp > prev.updatedAt)) && d <= to && !(d === to && stamp > checkIn.updatedAt);
   const separateFunds = new Set(live(data.funds).filter((f) => f.heldIn === 'separate').map((f) => f.id));
 
   const r = {
     ...base,
     income: sum(allPaydays(data, from, to).map((p) => p.amount)),
-    bonuses: sum(live(data.incomeReceived).filter((i) => inWindow(i.date)).map((i) => i.amount)),
+    bonuses: sum(live(data.incomeReceived).filter((i) => inWindow(i.date, i.updatedAt)).map((i) => i.amount)),
     bills: sum(outflowsBetween(data, from, to).map((o) => o.amount)),
-    spending: sum(live(data.spending).filter((s) => inWindow(s.date)).map((s) => s.amount)),
+    spending: sum(live(data.spending).filter((s) => inWindow(s.date, s.updatedAt)).map((s) => s.amount)),
     extraPayments: sum(
       live(data.debtPayments)
-        .filter((p) => p.kind === 'extra' && inWindow(p.date))
+        .filter((p) => p.kind === 'extra' && inWindow(p.date, p.updatedAt))
         .map((p) => p.amount),
     ),
     transfersToFunds: sum(
       live(data.allocations)
-        .filter((a) => a.status === 'done' && a.doneOn && inWindow(a.doneOn) && a.target.type === 'fund' && separateFunds.has(a.target.id))
+        .filter((a) => a.status === 'done' && a.doneOn && inWindow(a.doneOn, a.updatedAt) && a.target.type === 'fund' && separateFunds.has(a.target.id))
         .map((a) => a.amount),
     ),
   };
@@ -89,7 +92,6 @@ export function estimateBalance(data: AppData, date: ISODate): BalanceEstimate |
     .sort((a, b) => a.date.localeCompare(b.date) || a.updatedAt.localeCompare(b.updatedAt))
     .pop();
   if (!last) return null;
-  if (last.date >= date) return { balance: last.balance, from: last, unloggedBudgets: 0 };
 
   const probe: BalanceCheckIn = { id: 'probe', updatedAt: '9999', date, balance: 0, note: '' };
   const expected = reconcile(data, probe).expected ?? last.balance;
@@ -111,8 +113,8 @@ export function estimateBalance(data: AppData, date: ISODate): BalanceEstimate |
       );
       periodUnlogged += Math.max(0, Math.round(line.amount * share) - logged);
     }
-    // Spending without a category (e.g. worked out at a check-in) already covers part of the budgets.
-    const unsorted = sum(live(data.spending).filter((s) => s.categoryId === null && s.date >= from && s.date <= end).map((s) => s.amount));
+    // Spending worked out at a check-in (no category) already covers part of the budgets.
+    const unsorted = sum(live(data.spending).filter((s) => s.inferred && s.date >= from && s.date <= end).map((s) => s.amount));
     unlogged += Math.max(0, periodUnlogged - unsorted);
   }
   return { balance: expected - unlogged, from: last, unloggedBudgets: unlogged };
@@ -146,8 +148,9 @@ export function safeToAssign(data: AppData, date: ISODate, balance: Cents): Safe
         .filter((s) => s.categoryId === categoryId && s.date >= period.start && s.date <= period.end)
         .map((s) => s.amount),
     );
-  // Spending with no category (worked out from a check-in) comes off the budgets as a whole.
-  const unsorted = sum(live(data.spending).filter((s) => s.categoryId === null && s.date >= period.start && s.date <= period.end).map((s) => s.amount));
+  // Spending worked out at a check-in comes off the budgets as a whole. A purchase logged as
+  // "Other" isn't budget money, so it lowers Safe to spend through the balance instead.
+  const unsorted = sum(live(data.spending).filter((s) => s.inferred && s.date >= period.start && s.date <= period.end).map((s) => s.amount));
   const remainingBudgets = Math.max(
     0,
     sum((plan?.lines ?? []).filter((l) => l.kind === 'category').map((l) => Math.max(0, l.amount - spentInPeriod(l.refId)))) - unsorted,

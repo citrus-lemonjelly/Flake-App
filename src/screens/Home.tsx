@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { byId } from '../engine';
+import { byId, live } from '../engine';
 import { completeAllocation, recordPaycheck } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import type { Derived } from '../state/derive';
-import { Empty, SegBar, type Segment } from '../ui/components';
+import { Bar, Empty, SegBar, type Segment } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { STRATEGY_LABEL, minus, money, monthOnly, monthYear, monthsBetween, shortDate, weekdayDate, weekdayShort } from '../ui/format';
 import { AssignSheet } from '../sheets/AssignSheet';
 import { CheckInSheet } from '../sheets/CheckInSheet';
 import { AssumptionsSheet, CushionSheet, MeaningSheet } from '../sheets/InfoSheets';
 import { PaycheckSheet } from '../sheets/EditSheets';
+import { LogSheet } from '../sheets/LogSheet';
 import { basisText as payBasisText } from '../ui/PaydayRow';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
@@ -68,6 +69,7 @@ export function Home() {
         <div className="stack">
           <CashHero />
           <NextUp />
+          <Budgets />
         </div>
         <div className="stack">
           {data.settings.showDebtOnHome && <DebtCard />}
@@ -413,6 +415,68 @@ function DebtCard() {
           <button className="link" style={{ whiteSpace: 'nowrap' }} onClick={() => ui.open(<AssumptionsSheet />)}>
             {x.assumptions.length ? 'Add details ›' : 'See how ›'}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What's left in each spending budget this paycheck, so a logged purchase visibly lands somewhere. */
+function Budgets() {
+  const x = useDerived();
+  const ui = useUI();
+  const data = useData();
+  const lines = x.current?.lines.filter((l) => l.kind === 'category') ?? [];
+  if (!lines.length || !x.current) return null;
+  const { start, end } = x.current.period;
+  // Spending a check-in worked out (unsorted) comes off the budgets as a whole.
+  const fromCheckIns = live(data.spending)
+    .filter((s) => s.inferred && s.date >= start && s.date <= end)
+    .reduce((t, s) => t + s.amount, 0);
+  const leftOverall = Math.max(0, lines.reduce((t, l) => t + Math.max(0, l.amount - (x.spentThisPeriod.get(l.refId) ?? 0)), 0) - fromCheckIns);
+  return (
+    <div className="card">
+      <h3>
+        This paycheck's budgets
+        <button className="link" onClick={() => ui.open(<LogSheet />)}>
+          + Log
+        </button>
+      </h3>
+      <ul className="list">
+        {lines.map((l) => {
+          const spent = x.spentThisPeriod.get(l.refId) ?? 0;
+          const left = l.amount - spent;
+          return (
+            <li key={l.refId}>
+              <div className="grow">
+                <div className="row" style={{ fontSize: 14 }}>
+                  <span>{l.name}</span>
+                  <span style={{ color: left < 0 ? 'var(--warn)' : undefined, fontWeight: 600 }}>{left < 0 ? `${money(-left)} over` : `${money(left)} left`}</span>
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <Bar value={l.amount ? spent / l.amount : 0} tone={left < 0 ? 'warn' : undefined} />
+                </div>
+                <div className="explain">
+                  {money(spent, true)} of {money(l.amount, true)} spent
+                </div>
+              </div>
+            </li>
+          );
+        })}
+        {fromCheckIns > 0 && (
+          <li>
+            <div className="grow" style={{ fontSize: 14 }}>
+              Found at check-ins, not sorted
+              <div className="explain">Spending your balance showed that wasn't logged to a budget</div>
+            </div>
+            <span style={{ fontWeight: 600 }}>−{money(fromCheckIns)}</span>
+          </li>
+        )}
+      </ul>
+      {fromCheckIns > 0 && (
+        <div className="row" style={{ borderTop: '1px solid var(--line)', paddingTop: 10, fontWeight: 600, fontSize: 14 }}>
+          <span>Left across all budgets</span>
+          <span>{money(leftOverall)}</span>
         </div>
       )}
     </div>

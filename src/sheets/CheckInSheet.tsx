@@ -28,7 +28,7 @@ function applyExplanation(d: AppData, ex: GapExplanation, date: ISODate, checkIn
     case 'paid-early':
       return ex.items.reduce((acc, o) => recordBillPayment(acc, { itemKind: o.itemKind, itemId: o.itemId, dueDate: o.dueDate, paidOn: date }), d);
     case 'spending':
-      return logSpending(d, { date, amount: ex.amount, categoryId: null, note: 'Spending since last check-in' });
+      return logSpending(d, { date, amount: ex.amount, categoryId: null, note: 'Spending since last check-in', inferred: true });
     case 'surplus':
       return patch(d, 'checkIns', checkInId, { note: `Under budget or extra income +${money(ex.amount)}` });
     default:
@@ -223,7 +223,7 @@ function ChangeExplanation({ gap, date, checkInId, onDone }: { gap: GapCheck; da
       switch (choice) {
         case 'spending':
           text = `${money(missing)} counted as ${live(d.categories).find((c) => c.id === cat)?.name ?? 'other'} spending.`;
-          return logSpending(d, { date, amount: missing, categoryId: cat, note: 'From check-in' });
+          return logSpending(d, { date, amount: missing, categoryId: cat, note: 'From check-in', inferred: cat === null || undefined });
         case 'payment': {
           if (target.startsWith('debt:')) {
             text = `${money(missing)} recorded as a payment to ${live(d.debts).find((x) => `debt:${x.id}` === target)?.name}.`;

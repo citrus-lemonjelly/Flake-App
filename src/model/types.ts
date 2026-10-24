@@ -128,6 +128,8 @@ export interface Spending extends Entity {
   amount: Cents;
   categoryId: Id | null;
   note: string;
+  /** Worked out at a check-in rather than logged; counts against the budgets as a whole. */
+  inferred?: boolean;
 }
 
 // ---------------------------------------------------------------------------

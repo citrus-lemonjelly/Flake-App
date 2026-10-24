@@ -87,7 +87,7 @@ export const appDataSchema = z.object({
   categories: z.array(
     z.object({ ...base, name: z.string(), amount: cents, cadence: z.enum(['weekly', 'per-period', 'monthly']), icon: z.string().optional() }),
   ),
-  spending: z.array(z.object({ ...base, date, amount: cents, categoryId: z.string().nullable(), note: z.string() })),
+  spending: z.array(z.object({ ...base, date, amount: cents, categoryId: z.string().nullable(), note: z.string(), inferred: z.boolean().optional() })),
   debts: z.array(
     z.object({
       ...base,
