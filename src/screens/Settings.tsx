@@ -11,6 +11,8 @@ import { WEEKDAYS, money, ordinal } from '../ui/format';
 import { PALETTES } from '../theme/palettes';
 import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
 import { SyncSheet } from '../sheets/SyncSheet';
+import { ChangelogSheet } from '../sheets/ChangelogSheet';
+import { APP_VERSION, CHANGELOG } from '../changelog';
 import { syncLabel, useSyncStatus } from '../state/sync';
 
 const CADENCE = { weekly: 'week', 'per-period': 'paycheck', monthly: 'month' };
@@ -191,6 +193,23 @@ export function Settings() {
             rows={live(data.categories).map((c) => ({ id: c.id, name: c.name, sub: `per ${CADENCE[c.cadence]}`, amount: money(c.amount), open: () => ui.open(<CategorySheet id={c.id} />) }))}
             empty="Groceries, gas, fun money…"
           />
+          <div className="card">
+            <h3>
+              About Flake
+              <span className="faint" style={{ fontSize: 13, fontWeight: 500 }}>
+                v{APP_VERSION}
+              </span>
+            </h3>
+            <div className="label">Latest: {CHANGELOG[0]!.title}</div>
+            <ul className="muted" style={{ fontSize: 14, paddingLeft: 18, margin: '6px 0 12px' }}>
+              {CHANGELOG[0]!.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <button className="btn small ghost" onClick={() => ui.open(<ChangelogSheet />)}>
+              See all changes
+            </button>
+          </div>
         </div>
       </div>
     </>

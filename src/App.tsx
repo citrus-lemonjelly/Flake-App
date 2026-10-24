@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { sampleData } from './data/sample';
 import { live, today } from './engine';
 import { entity } from './model/factory';
@@ -20,6 +20,8 @@ import { LogSheet } from './sheets/LogSheet';
 import { CheckInSheet } from './sheets/CheckInSheet';
 import { CelebrateSheet } from './sheets/InfoSheets';
 import { SyncSheet } from './sheets/SyncSheet';
+import { ChangelogSheet, hasUnseenRelease } from './sheets/ChangelogSheet';
+import { APP_VERSION } from './changelog';
 import { syncLabel, useSyncStatus } from './state/sync';
 
 const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
@@ -110,6 +112,7 @@ function Shell() {
         </div>
       </aside>
       <main className="main">{screen}</main>
+      <VersionBadge />
       <nav className="tabbar" aria-label="Main">
         {tabs.slice(0, 2).map((n) => (
           <TabButton key={n.route} {...n} />
@@ -124,6 +127,23 @@ function Shell() {
         ))}
       </nav>
     </div>
+  );
+}
+
+/** Desktop only: the version, bottom-right, opening the changelog. Shows "New" until seen on this device. */
+function VersionBadge() {
+  const ui = useUI();
+  const [unseen, setUnseen] = useState(hasUnseenRelease);
+  return (
+    <button
+      className="version-badge"
+      onClick={() => {
+        setUnseen(false);
+        ui.open(<ChangelogSheet />);
+      }}
+    >
+      Flake v{APP_VERSION} · What's new{unseen && <span className="new-dot">New</span>}
+    </button>
   );
 }
 
