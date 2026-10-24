@@ -1,6 +1,7 @@
-import type { Allocation, AppData, Cents, Debt, Funding, Id, ISODate } from '../model/types';
+import type { Allocation, AppData, Cents, Funding, Id, ISODate } from '../model/types';
 import { addDays, addMonths, clampedDay, daysBetween, makeDate, monthKey, weekday, yearMonth } from './dates';
 import { live } from './live';
+import { debtMonthlyPayment, outflowsBetween } from './outflows';
 import { splitEvenly, sum } from './money';
 import { allPaydays, expectedPay, payPeriods, paychecksPerYear, periodStartsInMonth, type PayPeriod, type Payday } from './payCalendar';
 
@@ -13,6 +14,10 @@ export interface PlanLine {
   amount: Cents;
   /** Set for amounts tied to a due date inside the period. */
   dueDate?: ISODate;
+  /** Week/month views: the day it actually leaves the bank, when that differs from the due date. */
+  payDate?: ISODate;
+  /** Week/month views: a check-in recorded this month's timing or amount. */
+  recorded?: boolean;
 }
 
 export interface PeriodPlan {
@@ -29,15 +34,6 @@ export interface PeriodPlan {
   unassigned: Cents;
 }
 
-/** The monthly amount a debt asks for: minimum (or fixed payment) plus escrow and extra principal. */
-export function debtMonthlyPayment(debt: Debt): Cents {
-  let min = 0;
-  if (debt.minPayment?.type === 'fixed') min = debt.minPayment.amount;
-  else if (debt.minPayment?.type === 'percent' && debt.balance)
-    min = Math.max(debt.minPayment.floor, Math.round((debt.balance * debt.minPayment.percent) / 100));
-  if (debt.balance !== null) min = Math.min(min, debt.balance);
-  return min + (debt.escrow ?? 0) + (debt.extraPrincipal ?? 0);
-}
 
 /** The share of a monthly amount that one pay period carries. */
 function monthlyShare(
@@ -228,20 +224,10 @@ export function planRange(data: AppData, start: ISODate, end: ISODate): RangePla
   const income = allPaydays(data, start, end);
   const lines: PlanLine[] = [];
 
-  const due = (name: string, refId: Id, kind: 'bill' | 'debt', amount: Cents, dueDay: number) => {
-    const { year, month1 } = yearMonth(start);
-    for (let m = makeDate(year, month1, 1); m <= end; m = addMonths(m, 1)) {
-      const ym = yearMonth(m);
-      const d = clampedDay(ym.year, ym.month1, dueDay);
-      if (d >= start && d <= end) lines.push({ kind, refId, name, amount, dueDate: d });
-    }
-  };
-  for (const b of live(data.bills)) due(b.name, b.id, 'bill', b.amount, b.dueDay);
-  for (const d of live(data.debts)) {
-    const pay = debtMonthlyPayment(d);
-    if (d.balance !== 0 && pay > 0 && d.dueDay !== null) due(d.name, d.id, 'debt', pay, d.dueDay);
-  }
-  lines.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+  // Bills and debt payments on the day they actually leave the bank (payday or due date).
+  for (const o of outflowsBetween(data, start, end))
+    lines.push({ kind: o.itemKind, refId: o.itemId, name: o.name, amount: o.amount, dueDate: o.dueDate, payDate: o.date, recorded: o.recorded });
+  lines.sort((a, b) => (a.payDate ?? a.dueDate ?? '').localeCompare(b.payDate ?? b.dueDate ?? ''));
 
   // Budgets, set-asides and assignments that belong to paychecks starting in this range.
   const paychecks = planPeriods(data, start, Math.ceil((daysBetween(start, end) + 1) / 7) + 2).filter((p) => p.period.start >= start && p.period.start <= end);

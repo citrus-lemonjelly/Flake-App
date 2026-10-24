@@ -436,7 +436,10 @@ function ComingUp() {
             <li key={i}>
               <div className="grow">
                 {u.name}
-                <div className="sub">{weekdayDate(u.date)}</div>
+                <div className="sub">
+                  {weekdayDate(u.date)}
+                  {u.date !== u.dueDate && ` · with that paycheck, due ${shortDate(u.dueDate)}`}
+                </div>
               </div>
               <span style={{ fontWeight: 600 }}>{money(u.amount)}</span>
             </li>

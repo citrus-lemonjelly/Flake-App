@@ -52,6 +52,7 @@ export const appDataSchema = z.object({
     // Added after v1 shipped; older backups get the defaults.
     palette: z.enum(PALETTE_IDS).default('ocean'),
     showDebtOnHome: z.boolean().default(true),
+    billTiming: z.enum(['payday', 'due-date']).default('due-date'),
     updatedAt: z.string().optional(),
   }),
   incomes: z.array(
@@ -71,6 +72,9 @@ export const appDataSchema = z.object({
     }),
   ),
   // Added after v1 shipped; older backups get an empty list.
+  billPayments: z
+    .array(z.object({ ...base, itemKind: z.enum(['bill', 'debt']), itemId: z.string(), dueDate: date, paidOn: date, amount: cents.nullable() }))
+    .default([]),
   paychecks: z
     .array(z.object({ ...base, sourceId: z.string(), payday: date, hours: z.number().min(0).max(200).nullable(), amount: cents.nullable() }))
     .default([]),
@@ -78,7 +82,7 @@ export const appDataSchema = z.object({
     z.object({ ...base, date, amount: cents, sourceId: z.string().nullable(), kind: z.enum(['bonus', 'other']), note: z.string() }),
   ),
   bills: z.array(
-    z.object({ ...base, name: z.string(), amount: cents, dueDay, funding, owner, autopay: z.boolean() }),
+    z.object({ ...base, name: z.string(), amount: cents, dueDay, funding, owner, autopay: z.boolean(), paidOn: z.enum(['payday', 'due-date']).optional() }),
   ),
   categories: z.array(
     z.object({ ...base, name: z.string(), amount: cents, cadence: z.enum(['weekly', 'per-period', 'monthly']), icon: z.string().optional() }),
@@ -101,6 +105,7 @@ export const appDataSchema = z.object({
       extraPrincipal: cents.optional(),
       includeInPlan: z.boolean(),
       originalBalance: cents.optional(),
+      paidOn: z.enum(['payday', 'due-date']).optional(),
     }),
   ),
   debtPayments: z.array(

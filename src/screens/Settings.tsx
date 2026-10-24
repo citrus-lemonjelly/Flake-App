@@ -92,6 +92,19 @@ export function Settings() {
           <div className="card">
             <h3>Household</h3>
             <TextField label="People" hint="Comma-separated. The first name is used in greetings." value={data.household.people.join(', ')} onChange={(v) => setHousehold({ people: v.split(',').map((s) => s.trim()).filter(Boolean) })} />
+            <div className="field">
+              <label>When do you pay bills?</label>
+              <Segmented
+                label="When do you pay bills"
+                value={data.settings.billTiming}
+                onChange={(billTiming) => set({ billTiming })}
+                options={[
+                  { value: 'payday', label: 'As soon as I get paid' },
+                  { value: 'due-date', label: 'On the due date' },
+                ]}
+              />
+              <div className="hint">Bills on autopay can be set to their due date one by one (Bills → tap a bill).</div>
+            </div>
             <div className="form-grid">
               <SelectField label="Weekly budgets reset on" value={String(data.household.weekStartsOn)} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} onChange={(v) => setHousehold({ weekStartsOn: Number(v) })} />
               <MoneyField label="Always keep in the bank" hint="This much stays in checking and is never counted as safe to spend." value={data.settings.cashBuffer} onChange={(c) => set({ cashBuffer: c ?? 0 })} />
@@ -169,7 +182,7 @@ export function Settings() {
             onAdd={() => ui.open(<BillSheet />)}
             rows={live(data.bills)
               .sort((a, b) => a.dueDay - b.dueDay)
-              .map((b) => ({ id: b.id, name: b.name, sub: `Due the ${ordinal(b.dueDay)}${b.funding === 'split' ? ' · split' : ''}`, amount: money(b.amount), open: () => ui.open(<BillSheet id={b.id} />) }))}
+              .map((b) => ({ id: b.id, name: b.name, sub: `Due the ${ordinal(b.dueDay)}${b.funding === 'split' ? ' · split' : ''}${b.paidOn === 'due-date' && data.settings.billTiming === 'payday' ? ' · autopay' : b.paidOn === 'payday' && data.settings.billTiming === 'due-date' ? ' · paid on payday' : ''}`, amount: money(b.amount), open: () => ui.open(<BillSheet id={b.id} />) }))}
             empty="Utilities, phone, insurance… Debt payments live under Debts."
           />
           <ListCard

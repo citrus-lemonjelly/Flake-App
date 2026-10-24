@@ -95,6 +95,13 @@ export interface IncomeReceived extends Entity {
  */
 export type Funding = 'due-date' | 'split';
 
+/**
+ * When a bill or debt payment actually leaves the bank:
+ * - 'payday': the day the paycheck that covers it lands ("I pay bills as soon as I get paid")
+ * - 'due-date': on its due date (autopay)
+ */
+export type PaidOn = 'payday' | 'due-date';
+
 export interface Bill extends Entity {
   name: string;
   amount: Cents; // per month
@@ -102,6 +109,8 @@ export interface Bill extends Entity {
   funding: Funding;
   owner: Owner;
   autopay: boolean;
+  /** Overrides the household's bill timing for this bill. */
+  paidOn?: PaidOn;
 }
 
 export type CategoryCadence = 'weekly' | 'per-period' | 'monthly';
@@ -155,6 +164,20 @@ export interface Debt extends Entity {
   includeInPlan: boolean;
   /** Original amount, for progress bars. Defaults to the balance when first entered. */
   originalBalance?: Cents;
+  /** Overrides the household's bill timing for this payment. */
+  paidOn?: PaidOn;
+}
+
+/**
+ * One month of a bill or debt payment that didn't follow its usual timing:
+ * paid early, not paid yet at a check-in, or a different amount.
+ */
+export interface BillPayment extends Entity {
+  itemKind: 'bill' | 'debt';
+  itemId: Id;
+  dueDate: ISODate; // which month's occurrence
+  paidOn: ISODate; // when it actually left (or is expected to)
+  amount: Cents | null; // when different from usual
 }
 
 export interface DebtPayment extends Entity {
@@ -244,6 +267,8 @@ export interface Settings {
   palette: PaletteId;
   /** Show the estimated debt-free card on Home. */
   showDebtOnHome: boolean;
+  /** When bills leave the bank unless a bill says otherwise. */
+  billTiming: PaidOn;
   /** Last edit, for sync (settings sync as one record). */
   updatedAt?: string;
 }
@@ -266,6 +291,7 @@ export interface AppData {
   incomes: IncomeSource[];
   incomeReceived: IncomeReceived[];
   paychecks: PaycheckRecord[];
+  billPayments: BillPayment[];
   bills: Bill[];
   categories: Category[];
   spending: Spending[];

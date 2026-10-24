@@ -1,37 +1,10 @@
 import type { AppData, BalanceCheckIn, Cents, ISODate } from '../model/types';
-import { addDays, addMonths, clampedDay, daysBetween, makeDate, yearMonth } from './dates';
+import { addDays, daysBetween } from './dates';
 import { live } from './live';
 import { sum } from './money';
 import { allPaydays, periodContaining } from './payCalendar';
-import { debtMonthlyPayment, planPeriods } from './budget';
-
-/** A bill or debt payment leaving the account on a specific date. */
-export interface ScheduledOutflow {
-  date: ISODate;
-  name: string;
-  amount: Cents;
-}
-
-/** Bills and debt payments by their actual due dates in [from, to]. Funding style doesn't matter for cash. */
-export function outflowsBetween(data: AppData, from: ISODate, to: ISODate): ScheduledOutflow[] {
-  const items = [
-    ...live(data.bills).map((b) => ({ name: b.name, amount: b.amount, dueDay: b.dueDay })),
-    ...live(data.debts)
-      .filter((d) => d.balance !== 0 && d.dueDay !== null)
-      .map((d) => ({ name: d.name, amount: debtMonthlyPayment(d), dueDay: d.dueDay! })),
-  ].filter((i) => i.amount > 0);
-
-  const out: ScheduledOutflow[] = [];
-  const { year, month1 } = yearMonth(from);
-  for (let m = makeDate(year, month1, 1); m <= to; m = addMonths(m, 1)) {
-    const ym = yearMonth(m);
-    for (const i of items) {
-      const date = clampedDay(ym.year, ym.month1, i.dueDay);
-      if (date >= from && date <= to) out.push({ date, name: i.name, amount: i.amount });
-    }
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date));
-}
+import { planPeriods } from './budget';
+import { outflowsBetween, type ScheduledOutflow } from './outflows';
 
 export interface Reconciliation {
   from: BalanceCheckIn | null;
@@ -129,14 +102,18 @@ export function estimateBalance(data: AppData, date: ISODate): BalanceEstimate |
     if (start >= currentStart) break;
     const from = start > windowStart ? start : windowStart;
     const share = (daysBetween(from, end) + 1) / (daysBetween(start, end) + 1);
+    let periodUnlogged = 0;
     for (const line of plan.lines.filter((l) => l.kind === 'category')) {
       const logged = sum(
         live(data.spending)
           .filter((s) => s.categoryId === line.refId && s.date >= from && s.date <= end)
           .map((s) => s.amount),
       );
-      unlogged += Math.max(0, Math.round(line.amount * share) - logged);
+      periodUnlogged += Math.max(0, Math.round(line.amount * share) - logged);
     }
+    // Spending without a category (e.g. worked out at a check-in) already covers part of the budgets.
+    const unsorted = sum(live(data.spending).filter((s) => s.categoryId === null && s.date >= from && s.date <= end).map((s) => s.amount));
+    unlogged += Math.max(0, periodUnlogged - unsorted);
   }
   return { balance: expected - unlogged, from: last, unloggedBudgets: unlogged };
 }
@@ -155,10 +132,13 @@ export interface SafeToAssign {
   safe: Cents;
 }
 
-/** How much of today's bank balance can go into the pot without shorting anything before next payday. */
+/**
+ * How much of a bank balance can go into the pot without shorting anything before next payday.
+ * Anything scheduled for that date itself counts as already out of the balance.
+ */
 export function safeToAssign(data: AppData, date: ISODate, balance: Cents): SafeToAssign {
   const period = periodContaining(data, date);
-  const upcoming = outflowsBetween(data, date, period.end);
+  const upcoming = outflowsBetween(data, addDays(date, 1), period.end);
   const [plan] = planPeriods(data, period.start, 1);
   const spentInPeriod = (categoryId: string) =>
     sum(
@@ -166,8 +146,11 @@ export function safeToAssign(data: AppData, date: ISODate, balance: Cents): Safe
         .filter((s) => s.categoryId === categoryId && s.date >= period.start && s.date <= period.end)
         .map((s) => s.amount),
     );
-  const remainingBudgets = sum(
-    (plan?.lines ?? []).filter((l) => l.kind === 'category').map((l) => Math.max(0, l.amount - spentInPeriod(l.refId))),
+  // Spending with no category (worked out from a check-in) comes off the budgets as a whole.
+  const unsorted = sum(live(data.spending).filter((s) => s.categoryId === null && s.date >= period.start && s.date <= period.end).map((s) => s.amount));
+  const remainingBudgets = Math.max(
+    0,
+    sum((plan?.lines ?? []).filter((l) => l.kind === 'category').map((l) => Math.max(0, l.amount - spentInPeriod(l.refId)))) - unsorted,
   );
   const plannedNotDone = sum((plan?.allocations ?? []).filter((a) => a.status === 'planned').map((a) => a.amount));
   const fundsInChecking = sum(live(data.funds).filter((f) => f.heldIn === 'checking').map((f) => f.balance));
@@ -183,4 +166,52 @@ export function safeToAssign(data: AppData, date: ISODate, balance: Cents): Safe
     buffer,
     safe: balance - upcomingTotal - remainingBudgets - plannedNotDone - fundsInChecking - buffer,
   };
+}
+
+/** Gaps smaller than this are rounding, not something to explain. */
+export const GAP_TOLERANCE: Cents = 100;
+
+export type GapExplanation =
+  | { kind: 'none' }
+  /** The balance is higher by exactly today's bills: they haven't gone out yet. */
+  | { kind: 'unpaid-today'; items: ScheduledOutflow[] }
+  /** The balance is lower by exactly one or two upcoming bills: they were paid early. */
+  | { kind: 'paid-early'; items: ScheduledOutflow[] }
+  /** Lower for any other reason: spending that wasn't logged. */
+  | { kind: 'spending'; amount: Cents }
+  /** Higher for any other reason: budgets underspent, or extra income. */
+  | { kind: 'surplus'; amount: Cents };
+
+export interface GapCheck {
+  expected: Cents;
+  difference: Cents; // actual − expected
+  explanation: GapExplanation;
+}
+
+/**
+ * Work out why a check-in balance differs from what Flake estimated, so the
+ * check-in usually needs nothing but the balance. Uses data from before the
+ * check-in is saved. Returns null on a first check-in (nothing to compare).
+ */
+export function explainGap(data: AppData, date: ISODate, balance: Cents): GapCheck | null {
+  const est = estimateBalance(data, date);
+  if (!est || est.from.date > date) return null;
+  const expected = est.balance;
+  const difference = balance - expected;
+  const near = (a: Cents, b: Cents) => Math.abs(a - b) <= GAP_TOLERANCE;
+  const result = (explanation: GapExplanation): GapCheck => ({ expected, difference, explanation });
+
+  if (Math.abs(difference) <= GAP_TOLERANCE) return result({ kind: 'none' });
+  if (difference > 0) {
+    const today = outflowsBetween(data, date, date).filter((o) => !o.recorded);
+    if (today.length && near(difference, sum(today.map((o) => o.amount)))) return result({ kind: 'unpaid-today', items: today });
+    return result({ kind: 'surplus', amount: difference });
+  }
+  const soon = outflowsBetween(data, addDays(date, 1), addDays(date, 16)).filter((o) => !o.recorded);
+  const single = soon.find((o) => near(-difference, o.amount));
+  if (single) return result({ kind: 'paid-early', items: [single] });
+  for (let i = 0; i < soon.length; i++)
+    for (let j = i + 1; j < soon.length; j++)
+      if (near(-difference, soon[i]!.amount + soon[j]!.amount)) return result({ kind: 'paid-early', items: [soon[i]!, soon[j]!] });
+  return result({ kind: 'spending', amount: -difference });
 }

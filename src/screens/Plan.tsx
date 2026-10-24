@@ -42,7 +42,11 @@ function explainLine(data: AppData, plan: PeriodPlan, l: PlanLine): string {
     const f = byId(data.funds, l.refId);
     return f?.targetDate ? `So ${f.name} is fully funded by ${shortDate(f.targetDate)}` : 'Set aside';
   }
-  if (l.dueDate) return `Due ${weekdayDate(l.dueDate)}`;
+  if (l.dueDate) {
+    const item = l.kind === 'bill' ? byId(data.bills, l.refId) : byId(data.debts, l.refId);
+    const onPayday = (item?.paidOn ?? data.settings.billTiming) === 'payday';
+    return `Due ${weekdayDate(l.dueDate)}${onPayday ? ' · paid the day this paycheck lands' : ' · autopay on the due date'}`;
+  }
   // Split across the paychecks that start this month.
   const monthly = l.kind === 'bill' ? byId(data.bills, l.refId)?.amount : (() => { const d = byId(data.debts, l.refId); return d ? debtMonthlyPayment(d) : undefined; })();
   const starts = periodStartsInMonth(data, start);
@@ -352,7 +356,8 @@ function explainRangeLine(data: AppData, r: RangePlan, l: PlanLine): string {
   }
   if (l.kind === 'fund') return 'Set aside from the paychecks that start here';
   const split = l.kind === 'bill' ? byId(data.bills, l.refId)?.funding === 'split' : byId(data.debts, l.refId)?.funding === 'split';
-  return `Due ${weekdayDate(l.dueDate!)}${split ? ', in full. The Paycheck view saves for it across paychecks.' : ''}`;
+  const when = l.payDate && l.payDate !== l.dueDate ? `Paid ${weekdayDate(l.payDate)} when the paycheck lands · due ${shortDate(l.dueDate!)}` : `Due ${weekdayDate(l.dueDate!)}`;
+  return `${when}${l.recorded ? ' · recorded at a check-in' : ''}${split ? '. In full; the Paycheck view saves for it across paychecks.' : ''}`;
 }
 
 function RangeView({ kind }: { kind: 'week' | 'month' }) {

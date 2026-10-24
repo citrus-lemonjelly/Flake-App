@@ -2,6 +2,7 @@ import { emptyData, entity, nowStamp } from '../model/factory';
 import type {
   AppData,
   BalanceCheckIn,
+  BillPayment,
   Cents,
   CollectionKey,
   Entity,
@@ -47,7 +48,7 @@ export function updateHousehold(data: AppData, fields: Partial<Household>): AppD
   return { ...data, household: { ...data.household, ...fields, updatedAt: nowStamp() } };
 }
 
-export const ENTITY_KEYS: CollectionKey[] = ['incomes', 'paychecks', 'incomeReceived', 'bills', 'categories', 'spending', 'debts', 'debtPayments', 'funds', 'allocations', 'checkIns', 'milestones'];
+export const ENTITY_KEYS: CollectionKey[] = ['incomes', 'paychecks', 'billPayments', 'incomeReceived', 'bills', 'categories', 'spending', 'debts', 'debtPayments', 'funds', 'allocations', 'checkIns', 'milestones'];
 
 /** Stamp every record as just edited, e.g. after importing a backup, so sync uploads all of it. */
 export function touchAll(data: AppData): AppData {
@@ -102,6 +103,13 @@ export function recordPaycheck(data: AppData, p: { sourceId: Id; payday: ISODate
   const fields = { ...(p.hours !== undefined && { hours: p.hours }), ...(p.amount !== undefined && { amount: p.amount }) };
   if (existing) return patch(data, 'paychecks', existing.id, fields);
   return upsert(data, 'paychecks', entity<PaycheckRecord>({ sourceId: p.sourceId, payday: p.payday, hours: null, amount: null, ...fields }));
+}
+
+/** Record when one month's bill or debt payment actually leaves (or left) the bank. */
+export function recordBillPayment(data: AppData, p: { itemKind: 'bill' | 'debt'; itemId: Id; dueDate: ISODate; paidOn: ISODate; amount?: Cents | null }): AppData {
+  const existing = data.billPayments.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate);
+  if (existing) return patch(data, 'billPayments', existing.id, { paidOn: p.paidOn, ...(p.amount !== undefined && { amount: p.amount }) });
+  return upsert(data, 'billPayments', entity<BillPayment>({ itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: p.paidOn, amount: p.amount ?? null }));
 }
 
 export function checkIn(data: AppData, c: { date: ISODate; balance: Cents; note?: string }): { data: AppData; checkIn: BalanceCheckIn } {

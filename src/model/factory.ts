@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   palette: 'ocean',
   showDebtOnHome: true,
+  billTiming: 'due-date',
 };
 
 export function emptyData(): AppData {
@@ -32,6 +33,7 @@ export function emptyData(): AppData {
     incomes: [],
     incomeReceived: [],
     paychecks: [],
+    billPayments: [],
     bills: [],
     categories: [],
     spending: [],

@@ -4,6 +4,7 @@ import {
   addMonths,
   allPaydays,
   compareStrategies,
+  daysBetween,
   evaluateMilestones,
   live,
   makeDate,
@@ -35,6 +36,8 @@ export interface Assumption {
 
 /** How far back an unconfirmed paycheck still gets a "was it $X?" prompt. */
 const CONFIRM_WINDOW_DAYS = 7;
+/** Twice a week: nudge for a check-in after this many days. */
+const CHECK_IN_EVERY_DAYS = 3;
 
 export type NextAction =
   | { kind: 'confirm-pay'; payday: Payday }
@@ -128,6 +131,7 @@ export function derive(data: AppData, now: ISODate = todayFn()): Derived {
       .pop() ?? null;
   const estimate = estimateBalance(data, now);
   const estimatedBalance = estimate?.balance ?? null;
+  const daysSinceCheckIn = lastCheckIn ? daysBetween(lastCheckIn.date, now) : 0;
   const paydaysSinceCheckIn = lastCheckIn ? allPaydays(data, addDays(lastCheckIn.date, 1), now).length : 0;
 
   const assumptions: Assumption[] = [];
@@ -151,7 +155,7 @@ export function derive(data: AppData, now: ISODate = todayFn()): Derived {
   const safe = estimatedBalance === null ? null : safeToAssign(data, now, estimatedBalance);
   const plannedNotDone = (current?.allocations ?? []).filter((a) => a.status === 'planned');
   // Paychecks that landed recently but whose real amount hasn't been confirmed (hourly pay asks by default).
-  const asksToConfirm = new Set(live(data.incomes).filter((s) => s.confirmOnPayday ?? !!s.hourly).map((s) => s.id));
+  const asksToConfirm = new Set(live(data.incomes).filter((s) => s.confirmOnPayday ?? false).map((s) => s.id));
   const toConfirm = allPaydays(data, addDays(now, -CONFIRM_WINDOW_DAYS), now).filter((p) => asksToConfirm.has(p.sourceId) && p.basis !== 'actual');
   // Hourly paychecks coming up this week whose hours aren't in yet.
   const hourlyIds = new Set(live(data.incomes).filter((s) => s.hourly).map((s) => s.id));
@@ -165,6 +169,8 @@ export function derive(data: AppData, now: ISODate = todayFn()): Derived {
       ? { kind: 'check-in', reason: 'Add your bank balance to see what’s safe to spend.' }
       : paydaysSinceCheckIn > 0
         ? { kind: 'check-in', reason: `${paydaysSinceCheckIn} ${paydaysSinceCheckIn === 1 ? 'payday has' : 'paydays have'} landed since your last check-in.` }
+        : daysSinceCheckIn >= CHECK_IN_EVERY_DAYS
+          ? { kind: 'check-in', reason: `It's been ${daysSinceCheckIn} days since your last check-in.` }
         : needsHours[0]
           ? { kind: 'log-hours', payday: needsHours[0] }
           : current && current.unassigned > 0
@@ -196,7 +202,7 @@ export function derive(data: AppData, now: ISODate = todayFn()): Derived {
     safe,
     assumptions,
     nextAction,
-    upcoming: outflowsBetween(data, now, addDays(now, 21)).slice(0, 6),
+    upcoming: outflowsBetween(data, addDays(now, 1), addDays(now, 21)).slice(0, 6),
     nextPaydays: allPaydays(data, addDays(now, 1), addDays(now, 16)).slice(0, 3),
     spentThisPeriod,
     needsDetails,

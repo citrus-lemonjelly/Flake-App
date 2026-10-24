@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { byId, expectedPay, hourlyTakeHome, paycheckRecord, today } from '../engine';
 import { entity } from '../model/factory';
-import type { Bill, Category, Cents, Debt, DebtKind, Fund, HourlyPay, IncomeSource, PaySchedule } from '../model/types';
+import type { Bill, Category, Cents, Debt, DebtKind, Fund, HourlyPay, IncomeSource, PaidOn, PaySchedule } from '../model/types';
 import { logDebtPayment, recordPaycheck, remove, setDebtBalance, upsert } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
@@ -175,6 +175,7 @@ export function DebtSheet({ id }: { id?: string }) {
           )}
         </>
       )}
+      <TimingField value={d.paidOn} onChange={(paidOn) => set({ paidOn })} />
       <Toggle label="Include in the payoff plan" hint={isMortgage ? 'Usually off: extra money goes to higher-rate debts first.' : 'Extra money from the pot can go here.'} checked={d.includeInPlan} onChange={(includeInPlan) => set({ includeInPlan })} />
     </EditFrame>
   );
@@ -247,7 +248,7 @@ export function BillSheet({ id }: { id?: string }) {
         />
         <SelectField label="Whose" value={b.owner} options={owners} onChange={(owner) => set({ owner })} />
       </div>
-      <Toggle label="Autopay" checked={b.autopay} onChange={(autopay) => set({ autopay })} />
+      <TimingField value={b.paidOn} onChange={(paidOn) => set({ paidOn, autopay: paidOn === 'due-date' })} />
     </EditFrame>
   );
 }
@@ -291,7 +292,7 @@ export function IncomeSheet({ id }: { id?: string }) {
             onChange={(v) =>
               set(
                 v === 'hourly'
-                  ? { hourly: s.hourly ?? { rate: 0, usualHours: 40, takeHomePct: 80 }, confirmOnPayday: s.confirmOnPayday ?? true }
+                  ? { hourly: s.hourly ?? { rate: 0, usualHours: 40, takeHomePct: 80 } }
                   : { hourly: undefined },
               )
             }
@@ -361,11 +362,29 @@ export function IncomeSheet({ id }: { id?: string }) {
       <Toggle label="Plan around this paycheck" hint="Pay periods run from one of these paychecks to the next. Usually the main paycheck." checked={s.anchorsPayPeriod} onChange={(anchorsPayPeriod) => set({ anchorsPayPeriod })} />
       <Toggle
         label="Confirm the amount after each payday"
-        hint="Flake asks what actually landed, so the plan uses the real number."
-        checked={s.confirmOnPayday ?? !!h}
+        hint="Optional: Flake asks what actually landed. Check-ins catch differences anyway."
+        checked={s.confirmOnPayday ?? false}
         onChange={(confirmOnPayday) => set({ confirmOnPayday })}
       />
     </EditFrame>
+  );
+}
+
+/** When a bill or payment leaves the bank, relative to the household setting. */
+function TimingField({ value, onChange }: { value: PaidOn | undefined; onChange: (v: PaidOn | undefined) => void }) {
+  const { settings } = useData();
+  const house = settings.billTiming === 'payday' ? 'as soon as you get paid' : 'on the due date';
+  return (
+    <SelectField
+      label="Leaves the bank"
+      value={value ?? 'default'}
+      options={[
+        { value: 'default', label: `Like your other bills (${house})` },
+        { value: 'due-date', label: 'Autopay on the due date' },
+        { value: 'payday', label: 'When the paycheck that covers it lands' },
+      ]}
+      onChange={(v) => onChange(v === 'default' ? undefined : (v as PaidOn))}
+    />
   );
 }
 

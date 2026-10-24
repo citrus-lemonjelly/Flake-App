@@ -2,6 +2,7 @@ export * from './money';
 export * from './dates';
 export * from './live';
 export * from './payCalendar';
+export * from './outflows';
 export * from './budget';
 export * from './debt';
 export * from './mortgage';

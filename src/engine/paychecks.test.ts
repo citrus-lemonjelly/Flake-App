@@ -62,9 +62,11 @@ describe('hourly paychecks', () => {
 });
 
 describe('payday prompts', () => {
-  it('asks to confirm a paycheck that landed, until it is confirmed', () => {
+  it('asks to confirm a paycheck that landed only when that prompt is turned on', () => {
     let { data, id } = household();
     data = checkIn(data, { date: '2026-10-30', balance: 100_000 }).data;
+    expect(derive(data, '2026-10-30').nextAction.kind).not.toBe('confirm-pay'); // off by default
+    data = { ...data, incomes: data.incomes.map((s) => ({ ...s, confirmOnPayday: true })) };
     const n = derive(data, '2026-10-30').nextAction;
     expect(n).toMatchObject({ kind: 'confirm-pay', payday: { payday: '2026-10-29', amount: 60_000 } });
     data = recordPaycheck(data, { sourceId: id, payday: '2026-10-29', amount: 60_500 });
