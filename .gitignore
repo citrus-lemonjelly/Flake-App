@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.local
+.env
+.env.*
+
+# Personal household data (balances, names, previews built from them).
+# Never commit this folder: the GitHub repo is public.
+local/
+*.tsbuildinfo
