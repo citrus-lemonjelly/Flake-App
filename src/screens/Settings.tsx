@@ -1,16 +1,17 @@
 import { useRef } from 'react';
 import { live, paychecksPerYear } from '../engine';
-import { emptyData } from '../model/factory';
 import type { Settings as SettingsT } from '../model/types';
 import { sampleData } from '../data/sample';
 import { exportJson, importJson } from '../store/storage';
-import { updateSettings } from '../store/actions';
+import { eraseAll, replaceEverything, updateHousehold, updateSettings } from '../store/actions';
 import { useData, useStore, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import { MoneyField, NumberField, SelectField, Segmented, TextField, Toggle } from '../ui/components';
 import { WEEKDAYS, money, ordinal } from '../ui/format';
 import { PALETTES } from '../theme/palettes';
 import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
+import { SyncSheet } from '../sheets/SyncSheet';
+import { syncLabel, useSyncStatus } from '../state/sync';
 
 const CADENCE = { weekly: 'week', 'per-period': 'paycheck', monthly: 'month' };
 
@@ -19,9 +20,10 @@ export function Settings() {
   const update = useUpdate();
   const store = useStore();
   const ui = useUI();
+  const sync = useSyncStatus();
   const file = useRef<HTMLInputElement>(null);
   const set = (fields: Partial<SettingsT>) => update((d) => updateSettings(d, fields));
-  const setHousehold = (fields: Partial<typeof data.household>) => update((d) => ({ ...d, household: { ...d.household, ...fields } }));
+  const setHousehold = (fields: Partial<typeof data.household>) => update((d) => updateHousehold(d, fields));
 
   const scheduleText = (s: (typeof data.incomes)[number]['schedule']) =>
     s.kind === 'weekly' ? `Every ${WEEKDAYS[s.weekday]}` : s.kind === 'biweekly' ? 'Every other week' : s.kind === 'semimonthly' ? `The ${ordinal(s.days[0])} & ${ordinal(s.days[1])}` : `The ${ordinal(s.day)}`;
@@ -46,6 +48,20 @@ export function Settings() {
 
       <div className="settings-grid">
         <div className="stack">
+          <div className="card">
+            <h3>Sync between devices</h3>
+            <div className="row">
+              <span className="muted" style={{ fontSize: 14 }}>
+                {sync.status === 'off' ? 'Not set up in this copy of Flake' : syncLabel(sync)}
+                {sync.email && <span className="faint" style={{ display: 'block', fontSize: 12 }}>{sync.email}</span>}
+              </span>
+              {sync.status !== 'off' && (
+                <button className="btn small" onClick={() => ui.open(<SyncSheet />)}>
+                  {sync.status === 'signed-out' ? 'Sign in' : sync.status === 'needs-choice' ? 'Finish setup' : 'Manage'}
+                </button>
+              )}
+            </div>
+          </div>
           <div className="card">
             <h3>Appearance</h3>
             <div className="swatches" role="radiogroup" aria-label="Color scheme">
@@ -86,7 +102,7 @@ export function Settings() {
           <div className="card">
             <h3>Backup & data</h3>
             <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
-              Everything is saved on this device. Download a backup now and then; syncing between phone and PC comes next.
+              Everything is saved on this device (and in your account when sync is on). A downloaded backup is still a good safety net.
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn small" onClick={download}>
@@ -98,7 +114,7 @@ export function Settings() {
               <button
                 className="btn small ghost"
                 onClick={() => {
-                  if (confirm('Replace everything with demo data? Download a backup first if you want to keep yours.')) store.replace(sampleData());
+                  if (confirm('Replace everything with demo data? Download a backup first if you want to keep yours.')) store.update((d) => replaceEverything(d, sampleData()));
                 }}
               >
                 Load demo data
@@ -106,7 +122,7 @@ export function Settings() {
               <button
                 className="btn small danger"
                 onClick={() => {
-                  if (confirm('Erase everything on this device? This cannot be undone.')) store.replace(emptyData());
+                  if (confirm('Erase everything on this device? This cannot be undone.')) store.update(eraseAll);
                 }}
               >
                 Erase everything
@@ -124,7 +140,7 @@ export function Settings() {
                 try {
                   const next = importJson(await f.text());
                   if (confirm('Replace everything on this device with this backup?')) {
-                    store.replace(next);
+                    store.update((d) => replaceEverything(d, next));
                     ui.toast('Backup imported.');
                   }
                 } catch (err) {

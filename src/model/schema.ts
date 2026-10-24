@@ -40,6 +40,7 @@ export const appDataSchema = z.object({
     name: z.string(),
     people: z.array(z.string()),
     weekStartsOn: z.number().int().min(0).max(6),
+    updatedAt: z.string().optional(),
   }),
   settings: z.object({
     strategy: z.enum(['avalanche', 'snowball', 'custom']),
@@ -51,6 +52,7 @@ export const appDataSchema = z.object({
     // Added after v1 shipped; older backups get the defaults.
     palette: z.enum(PALETTE_IDS).default('ocean'),
     showDebtOnHome: z.boolean().default(true),
+    updatedAt: z.string().optional(),
   }),
   incomes: z.array(
     z.object({

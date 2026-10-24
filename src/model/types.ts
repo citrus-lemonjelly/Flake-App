@@ -218,6 +218,8 @@ export interface Settings {
   palette: PaletteId;
   /** Show the estimated debt-free card on Home. */
   showDebtOnHome: boolean;
+  /** Last edit, for sync (settings sync as one record). */
+  updatedAt?: string;
 }
 
 export interface Household {
@@ -225,6 +227,8 @@ export interface Household {
   people: string[];
   /** Weekday used for 'weekly' categories (4 = Thursday, matching a Thursday paycheck). */
   weekStartsOn: number;
+  /** Last edit, for sync. */
+  updatedAt?: string;
 }
 
 export const SCHEMA_VERSION = 1;

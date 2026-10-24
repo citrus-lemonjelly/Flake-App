@@ -1,10 +1,11 @@
-import { entity, nowStamp } from '../model/factory';
+import { emptyData, entity, nowStamp } from '../model/factory';
 import type {
   AppData,
   BalanceCheckIn,
   Cents,
   CollectionKey,
   Entity,
+  Household,
   Id,
   ISODate,
   Settings,
@@ -38,7 +39,49 @@ export function remove<K extends CollectionKey>(data: AppData, key: K, id: Id): 
 }
 
 export function updateSettings(data: AppData, fields: Partial<Settings>): AppData {
-  return { ...data, settings: { ...data.settings, ...fields } };
+  return { ...data, settings: { ...data.settings, ...fields, updatedAt: nowStamp() } };
+}
+
+export function updateHousehold(data: AppData, fields: Partial<Household>): AppData {
+  return { ...data, household: { ...data.household, ...fields, updatedAt: nowStamp() } };
+}
+
+export const ENTITY_KEYS: CollectionKey[] = ['incomes', 'incomeReceived', 'bills', 'categories', 'spending', 'debts', 'debtPayments', 'funds', 'allocations', 'checkIns', 'milestones'];
+
+/** Stamp every record as just edited, e.g. after importing a backup, so sync uploads all of it. */
+export function touchAll(data: AppData): AppData {
+  const stamp = nowStamp();
+  const next = { ...data, settings: { ...data.settings, updatedAt: stamp }, household: { ...data.household, updatedAt: stamp } };
+  for (const k of ENTITY_KEYS) (next[k] as Entity[]) = (data[k] as Entity[]).map((r) => ({ ...r, updatedAt: stamp }));
+  return next;
+}
+
+/**
+ * Swap in a whole new data set (an imported backup, the demo): the old records
+ * are tombstoned and the new ones stamped as fresh edits, so synced devices
+ * end up with exactly the new set rather than a mix.
+ */
+export function replaceEverything(current: AppData, next: AppData): AppData {
+  const erased = eraseAll(current);
+  const fresh = touchAll(next);
+  const out = { ...fresh };
+  for (const k of ENTITY_KEYS) {
+    const ids = new Set((fresh[k] as Entity[]).map((r) => r.id));
+    (out[k] as Entity[]) = [...(erased[k] as Entity[]).filter((r) => !ids.has(r.id)), ...(fresh[k] as Entity[])];
+  }
+  return out;
+}
+
+/**
+ * Erase everything, leaving tombstones so the erase reaches other devices
+ * through sync instead of being undone by the next pull.
+ */
+export function eraseAll(data: AppData): AppData {
+  const stamp = nowStamp();
+  const blank = emptyData();
+  const next = { ...data, settings: { ...blank.settings, updatedAt: stamp }, household: { ...blank.household, updatedAt: stamp } };
+  for (const k of ENTITY_KEYS) (next[k] as Entity[]) = (data[k] as Entity[]).map((r) => (r.deletedAt ? r : { ...r, deletedAt: stamp, updatedAt: stamp }));
+  return next;
 }
 
 export function logSpending(data: AppData, s: { date: ISODate; amount: Cents; categoryId: Id | null; note?: string }): AppData {

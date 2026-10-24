@@ -3,7 +3,7 @@ import { sampleData } from './data/sample';
 import { live, today } from './engine';
 import { entity } from './model/factory';
 import type { IncomeSource } from './model/types';
-import { upsert } from './store/actions';
+import { replaceEverything, upsert } from './store/actions';
 import { importJson } from './store/storage';
 import { useData, useStore, useThemeSync } from './state/store';
 import { UIProvider, useUI, type Route } from './state/ui';
@@ -16,6 +16,8 @@ import { Settings } from './screens/Settings';
 import { LogSheet } from './sheets/LogSheet';
 import { CheckInSheet } from './sheets/CheckInSheet';
 import { CelebrateSheet } from './sheets/InfoSheets';
+import { SyncSheet } from './sheets/SyncSheet';
+import { syncLabel, useSyncStatus } from './state/sync';
 
 const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
   { route: 'home', label: 'Home', desk: 'Dashboard', icon: 'home' },
@@ -29,9 +31,20 @@ export function App() {
   useThemeSync();
   return (
     <UIProvider>
+      <SyncPrompt />
       <Gate />
     </UIProvider>
   );
+}
+
+/** When sync needs an answer (both this device and the account have data), ask right away. */
+function SyncPrompt() {
+  const s = useSyncStatus();
+  const ui = useUI();
+  useEffect(() => {
+    if (s.status === 'needs-choice') ui.open(<SyncSheet />);
+  }, [s.status, ui]);
+  return null;
 }
 
 /** First launch (no income and no debts yet) shows the welcome screen. */
@@ -61,6 +74,7 @@ function usePayoffCelebration() {
 
 function Shell() {
   const ui = useUI();
+  const syncStatus = useSyncStatus();
   usePayoffCelebration();
   const screen = { home: <Home />, plan: <Plan />, debts: <Debts />, goals: <Goals />, settings: <Settings /> }[ui.route];
   const tabs = NAV.filter((n) => n.route !== 'settings');
@@ -83,7 +97,9 @@ function Shell() {
         <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => ui.open(<CheckInSheet />)}>
           <Icon name="bank" size={18} /> Check in
         </button>
-        <div className="foot">Saved on this device</div>
+        <button className="foot link" style={{ textAlign: 'left', color: 'var(--ink3)', fontWeight: 500 }} onClick={() => ui.open(<SyncSheet />)}>
+          {syncLabel(syncStatus)}
+        </button>
       </aside>
       <main className="main">{screen}</main>
       <nav className="tabbar" aria-label="Main">
@@ -116,6 +132,7 @@ function TabButton({ route, label, icon }: { route: Route; label: string; icon: 
 function Welcome() {
   const store = useStore();
   const ui = useUI();
+  const syncStatus = useSyncStatus();
   const file = useRef<HTMLInputElement>(null);
   return (
     <div className="welcome">
@@ -123,10 +140,15 @@ function Welcome() {
       <h1>Flake</h1>
       <p>Plan every paycheck, chip away at debt, and see the day it's gone.</p>
       <div className="stack">
-        <button className="btn block" onClick={() => file.current?.click()}>
+        {syncStatus.status !== 'off' && (
+          <button className="btn block" onClick={() => ui.open(<SyncSheet />)}>
+            {syncStatus.status === 'signed-out' ? 'Sign in to sync' : syncLabel(syncStatus)}
+          </button>
+        )}
+        <button className={`btn block ${syncStatus.status !== 'off' ? 'ghost' : ''}`} onClick={() => file.current?.click()}>
           Import a backup
         </button>
-        <button className="btn ghost block" onClick={() => store.replace(sampleData())}>
+        <button className="btn ghost block" onClick={() => store.update((d) => replaceEverything(d, sampleData()))}>
           Explore with demo data
         </button>
         <button
@@ -157,7 +179,8 @@ function Welcome() {
             const f = e.target.files?.[0];
             if (!f) return;
             try {
-              store.replace(importJson(await f.text()));
+              const next = importJson(await f.text());
+              store.update((d) => replaceEverything(d, next));
               ui.toast('Backup imported.');
             } catch (err) {
               ui.toast(err instanceof Error ? err.message : 'Could not import that file.');
