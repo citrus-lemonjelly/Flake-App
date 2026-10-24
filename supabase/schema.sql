@@ -51,3 +51,5 @@ $$;
 
 grant select, insert, update, delete on public.flake_records to authenticated;
 grant execute on function public.flake_push(jsonb) to authenticated;
+-- Signed-out visitors can't call it at all (row-level security would reject their rows anyway).
+revoke execute on function public.flake_push(jsonb) from public, anon;
