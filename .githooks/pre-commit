@@ -1,0 +1,3 @@
+#!/bin/sh
+# Block commits that would publish private household details (see scripts/check-private.mjs).
+node scripts/check-private.mjs

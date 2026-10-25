@@ -6,7 +6,7 @@ import { PALETTE_IDS, SCHEMA_VERSION, type AppData } from './types';
 const cents = z.number().int();
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const owner = z.string();
-const base = { id: z.string().min(1), updatedAt: z.string(), deletedAt: z.string().optional() };
+const base = { id: z.string().min(1), updatedAt: z.string(), createdAt: z.string().optional(), deletedAt: z.string().optional() };
 const funding = z.enum(['due-date', 'split']);
 const dueDay = z.number().int().min(1).max(31);
 
@@ -131,6 +131,7 @@ export const appDataSchema = z.object({
       amount: cents,
       status: z.enum(['planned', 'done']),
       doneOn: date.optional(),
+      doneAt: z.string().optional(),
       note: z.string(),
     }),
   ),

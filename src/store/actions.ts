@@ -40,6 +40,11 @@ export function remove<K extends CollectionKey>(data: AppData, key: K, id: Id): 
   return { ...data, [key]: list.map((r) => (r.id === id ? { ...r, deletedAt: stamp, updatedAt: stamp } : r)) };
 }
 
+/** Undo a soft delete. A fresh updatedAt makes the restore win over the tombstone on other devices. */
+export function restore<K extends CollectionKey>(data: AppData, key: K, id: Id): AppData {
+  return patch(data, key, id, { deletedAt: undefined } as Partial<Item<K>>);
+}
+
 export function updateSettings(data: AppData, fields: Partial<Settings>): AppData {
   return { ...data, settings: { ...data.settings, ...fields, updatedAt: nowStamp() } };
 }
@@ -158,7 +163,7 @@ function recordPayoffs(data: AppData, date: ISODate): AppData {
 export function completeAllocation(data: AppData, allocationId: Id, date: ISODate): AppData {
   const a = byId(data.allocations, allocationId);
   if (!a || a.status === 'done') return data;
-  let next = patch(data, 'allocations', a.id, { status: 'done', doneOn: date });
+  let next = patch(data, 'allocations', a.id, { status: 'done', doneOn: date, doneAt: nowStamp() });
   if (a.target.type === 'debt') {
     next = logDebtPayment(next, { debtId: a.target.id, date, amount: a.amount, kind: 'extra', note: a.note });
   } else if (a.target.type === 'fund') {

@@ -21,6 +21,7 @@ import { CelebrateSheet } from './sheets/InfoSheets';
 import { SyncSheet } from './sheets/SyncSheet';
 import { ChangelogSheet, hasUnseenRelease } from './sheets/ChangelogSheet';
 import { APP_VERSION } from './changelog';
+import { UpdateBanner } from './ui/UpdateBanner';
 import { syncLabel, useSyncStatus } from './state/sync';
 
 const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
@@ -37,6 +38,7 @@ export function App() {
   return (
     <UIProvider>
       <SyncPrompt />
+      <UpdateBanner />
       <Gate />
     </UIProvider>
   );

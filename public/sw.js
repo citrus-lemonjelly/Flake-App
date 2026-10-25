@@ -22,6 +22,7 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.hostname.endsWith('supabase.co')) return; // live data only
+  if (url.pathname.endsWith('/version.json')) return; // always ask the network which version is live
 
   if (req.mode === 'navigate') {
     event.respondWith(

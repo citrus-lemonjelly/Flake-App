@@ -1,4 +1,4 @@
-import type { AppData, BalanceCheckIn, Cents, Debt, Id, ISODate, Strategy } from '../model/types';
+import { loggedAt, type AppData, type BalanceCheckIn, type Cents, type Debt, type Id, type ISODate, type Strategy } from '../model/types';
 import {
   addDays,
   addMonths,
@@ -127,7 +127,7 @@ export function derive(data: AppData, now: ISODate = todayFn()): Derived {
 
   const lastCheckIn =
     live(data.checkIns)
-      .sort((a, b) => a.date.localeCompare(b.date) || a.updatedAt.localeCompare(b.updatedAt))
+      .sort((a, b) => a.date.localeCompare(b.date) || loggedAt(a).localeCompare(loggedAt(b)))
       .pop() ?? null;
   const estimate = estimateBalance(data, now);
   const estimatedBalance = estimate?.balance ?? null;

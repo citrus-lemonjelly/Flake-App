@@ -48,6 +48,12 @@ Every push to `main` runs `.github/workflows/deploy.yml`: tests, build, then pub
 
 Without those variables the app builds with sync turned off and keeps everything on the device.
 
+## Releasing
+
+1. Add an entry to `src/changelog.ts` and bump `version` in `package.json` (a test fails if they differ).
+2. Commit. A pre-commit hook (`.githooks/pre-commit`, installed by `npm install`) runs `npm run check:private` and blocks the commit if a staged file contains a term from `local/private-terms.txt` or a Supabase secret key.
+3. Push to `main`. GitHub Actions tests, builds and deploys; open apps see an "update ready" banner.
+
 ## Private data
 
 The repo is public, so household numbers never go in it. `local/` is gitignored and holds the real household seed, tests that check the engine against the original spreadsheet, and design previews built from the real numbers. `src/data/sample.ts` is a made-up demo household.

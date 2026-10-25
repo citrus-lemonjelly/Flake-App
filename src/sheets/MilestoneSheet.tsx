@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { byId, live } from '../engine';
 import { entity } from '../model/factory';
 import type { Milestone, MilestoneRule } from '../model/types';
-import { remove, upsert } from '../store/actions';
+import { upsert } from '../store/actions';
 import { useData, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
+import { useRemoveWithUndo } from '../state/undo';
 import { MoneyField, SelectField, Sheet, TextField, Toggle } from '../ui/components';
 
 type RuleType = MilestoneRule['type'];
@@ -13,6 +14,7 @@ type RuleType = MilestoneRule['type'];
 export function MilestoneSheet({ id }: { id?: string }) {
   const data = useData();
   const update = useUpdate();
+  const removeWithUndo = useRemoveWithUndo();
   const ui = useUI();
   const existing = id ? byId(data.milestones, id) : undefined;
   const debts = live(data.debts);
@@ -64,7 +66,7 @@ export function MilestoneSheet({ id }: { id?: string }) {
             <button
               className="btn danger"
               onClick={() => {
-                update((d) => remove(d, 'milestones', existing.id));
+                removeWithUndo('milestones', existing.id, existing.name);
                 ui.close();
               }}
             >

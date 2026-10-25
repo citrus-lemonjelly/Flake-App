@@ -1,4 +1,4 @@
-import type { AppData, BalanceCheckIn, Cents, ISODate } from '../model/types';
+import { loggedAt, type AppData, type BalanceCheckIn, type Cents, type ISODate } from '../model/types';
 import { addDays, daysBetween } from './dates';
 import { live } from './live';
 import { sum } from './money';
@@ -28,8 +28,8 @@ export interface Reconciliation {
 export function reconcile(data: AppData, checkIn: BalanceCheckIn): Reconciliation {
   const prev =
     live(data.checkIns)
-      .filter((c) => c.date < checkIn.date || (c.date === checkIn.date && c.updatedAt < checkIn.updatedAt))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.updatedAt.localeCompare(b.updatedAt))
+      .filter((c) => c.date < checkIn.date || (c.date === checkIn.date && loggedAt(c) < loggedAt(checkIn)))
+      .sort((a, b) => a.date.localeCompare(b.date) || loggedAt(a).localeCompare(loggedAt(b)))
       .pop() ?? null;
   const base: Omit<Reconciliation, 'expected' | 'difference'> = {
     from: prev,
@@ -49,23 +49,23 @@ export function reconcile(data: AppData, checkIn: BalanceCheckIn): Reconciliatio
   const from = addDays(prev.date, 1);
   const to = checkIn.date;
   const inWindow = (d: ISODate, stamp: string) =>
-    (d > prev.date || (d === prev.date && stamp > prev.updatedAt)) && d <= to && !(d === to && stamp > checkIn.updatedAt);
+    (d > prev.date || (d === prev.date && stamp > loggedAt(prev))) && d <= to && !(d === to && stamp > loggedAt(checkIn));
   const separateFunds = new Set(live(data.funds).filter((f) => f.heldIn === 'separate').map((f) => f.id));
 
   const r = {
     ...base,
     income: sum(allPaydays(data, from, to).map((p) => p.amount)),
-    bonuses: sum(live(data.incomeReceived).filter((i) => inWindow(i.date, i.updatedAt)).map((i) => i.amount)),
+    bonuses: sum(live(data.incomeReceived).filter((i) => inWindow(i.date, loggedAt(i))).map((i) => i.amount)),
     bills: sum(outflowsBetween(data, from, to).map((o) => o.amount)),
-    spending: sum(live(data.spending).filter((s) => inWindow(s.date, s.updatedAt)).map((s) => s.amount)),
+    spending: sum(live(data.spending).filter((s) => inWindow(s.date, loggedAt(s))).map((s) => s.amount)),
     extraPayments: sum(
       live(data.debtPayments)
-        .filter((p) => p.kind === 'extra' && inWindow(p.date, p.updatedAt))
+        .filter((p) => p.kind === 'extra' && inWindow(p.date, loggedAt(p)))
         .map((p) => p.amount),
     ),
     transfersToFunds: sum(
       live(data.allocations)
-        .filter((a) => a.status === 'done' && a.doneOn && inWindow(a.doneOn, a.updatedAt) && a.target.type === 'fund' && separateFunds.has(a.target.id))
+        .filter((a) => a.status === 'done' && a.doneOn && inWindow(a.doneOn, a.doneAt ?? a.updatedAt) && a.target.type === 'fund' && separateFunds.has(a.target.id))
         .map((a) => a.amount),
     ),
   };
@@ -89,7 +89,7 @@ export interface BalanceEstimate {
 export function estimateBalance(data: AppData, date: ISODate): BalanceEstimate | null {
   const last = live(data.checkIns)
     .filter((c) => c.date <= date)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.updatedAt.localeCompare(b.updatedAt))
+    .sort((a, b) => a.date.localeCompare(b.date) || loggedAt(a).localeCompare(loggedAt(b)))
     .pop();
   if (!last) return null;
 

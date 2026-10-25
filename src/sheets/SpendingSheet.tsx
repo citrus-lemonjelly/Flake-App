@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { byId, live } from '../engine';
 import type { Cents } from '../model/types';
-import { patch, remove } from '../store/actions';
+import { patch } from '../store/actions';
 import { useData, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
+import { useRemoveWithUndo } from '../state/undo';
+import { money } from '../ui/format';
 import { DateField, MoneyField, SelectField, Sheet, TextField } from '../ui/components';
 
 /**
@@ -13,6 +15,7 @@ import { DateField, MoneyField, SelectField, Sheet, TextField } from '../ui/comp
 export function SpendingSheet({ id }: { id: string }) {
   const data = useData();
   const update = useUpdate();
+  const removeWithUndo = useRemoveWithUndo();
   const ui = useUI();
   const entry = byId(data.spending, id);
   const [amount, setAmount] = useState<Cents | null>(entry?.amount ?? null);
@@ -36,10 +39,8 @@ export function SpendingSheet({ id }: { id: string }) {
           <button
             className="btn danger"
             onClick={() => {
-              if (confirm('Delete this entry?')) {
-                update((d) => remove(d, 'spending', id));
-                ui.close();
-              }
+              removeWithUndo('spending', id, money(entry.amount));
+              ui.close();
             }}
           >
             Delete

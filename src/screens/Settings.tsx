@@ -11,6 +11,7 @@ import { WEEKDAYS, money, ordinal } from '../ui/format';
 import { PALETTES } from '../theme/palettes';
 import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
 import { SyncSheet } from '../sheets/SyncSheet';
+import { ConfirmSheet } from '../sheets/ConfirmSheet';
 import { setGuide } from '../guide';
 import { resetTips } from '../ui/ScreenTip';
 import { ChangelogSheet } from '../sheets/ChangelogSheet';
@@ -151,17 +152,25 @@ export function Settings() {
               </button>
               <button
                 className="btn small ghost"
-                onClick={() => {
-                  if (confirm('Replace everything with demo data? Download a backup first if you want to keep yours.')) store.update((d) => replaceEverything(d, sampleData()));
-                }}
+                onClick={() =>
+                  ui.open(
+                    <ConfirmSheet title="Load the demo household?" confirmLabel="Replace with demo" onConfirm={() => store.update((d) => replaceEverything(d, sampleData()))}>
+                      Everything you've entered is replaced by made-up demo data, on this device and every synced one. Download a backup first if you want to keep yours.
+                    </ConfirmSheet>,
+                  )
+                }
               >
                 Load demo data
               </button>
               <button
                 className="btn small danger"
-                onClick={() => {
-                  if (confirm('Erase everything on this device? This cannot be undone.')) store.update(eraseAll);
-                }}
+                onClick={() =>
+                  ui.open(
+                    <ConfirmSheet title="Erase everything?" confirmLabel="Erase everything" onConfirm={() => store.update(eraseAll)}>
+                      All your paychecks, bills, debts, budgets and history are deleted, on this device and every synced one. This can't be undone, so download a backup first if you might want it back.
+                    </ConfirmSheet>,
+                  )
+                }
               >
                 Erase everything
               </button>
@@ -177,10 +186,18 @@ export function Settings() {
                 if (!f) return;
                 try {
                   const next = importJson(await f.text());
-                  if (confirm('Replace everything on this device with this backup?')) {
-                    store.update((d) => replaceEverything(d, next));
-                    ui.toast('Backup imported.');
-                  }
+                  ui.open(
+                    <ConfirmSheet
+                      title="Replace everything with this backup?"
+                      confirmLabel="Import backup"
+                      onConfirm={() => {
+                        store.update((d) => replaceEverything(d, next));
+                        ui.toast('Backup imported.');
+                      }}
+                    >
+                      What's in Flake now is replaced by the backup, on this device and every synced one.
+                    </ConfirmSheet>,
+                  );
                 } catch (err) {
                   ui.toast(err instanceof Error ? err.message : 'Could not import that file.');
                 }

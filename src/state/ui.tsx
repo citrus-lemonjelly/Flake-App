@@ -14,7 +14,13 @@ interface UI {
   /** Show a sheet. The element receives nothing; sheets call ui.close() themselves. */
   open: (sheet: ReactNode) => void;
   close: () => void;
-  toast: (msg: string) => void;
+  /** A short message; with an action (e.g. Undo) it stays a little longer and shows a button. */
+  toast: (msg: string, action?: ToastAction) => void;
+}
+
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
 }
 
 const UICtx = createContext<UI | null>(null);
@@ -34,7 +40,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState<Route>(initialRoute);
   const [params, setParams] = useState<RouteParams>({});
   const [sheet, setSheet] = useState<ReactNode>(null);
-  const [toastMsg, setToast] = useState<string | null>(null);
+  const [toastMsg, setToast] = useState<{ msg: string; action?: ToastAction } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const go = useCallback((r: Route, p: RouteParams = {}) => {
@@ -44,10 +50,10 @@ export function UIProvider({ children }: { children: ReactNode }) {
     window.scrollTo({ top: 0 });
   }, []);
   const close = useCallback(() => setSheet(null), []);
-  const toast = useCallback((msg: string) => {
-    setToast(msg);
+  const toast = useCallback((msg: string, action?: ToastAction) => {
+    setToast({ msg, action });
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setToast(null), 2200);
+    timer.current = setTimeout(() => setToast(null), action ? 6000 : 2200);
   }, []);
   const ui = useMemo(() => ({ route, params, go, open: setSheet, close, toast }), [route, params, go, close, toast]);
 
@@ -57,7 +63,18 @@ export function UIProvider({ children }: { children: ReactNode }) {
       {sheet}
       {toastMsg && (
         <div className="toast" role="status">
-          {toastMsg}
+          {toastMsg.msg}
+          {toastMsg.action && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                toastMsg.action!.onClick();
+                setToast(null);
+              }}
+            >
+              {toastMsg.action.label}
+            </button>
+          )}
         </div>
       )}
     </UICtx.Provider>

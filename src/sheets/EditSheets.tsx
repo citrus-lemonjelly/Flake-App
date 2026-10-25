@@ -2,9 +2,10 @@ import { useState, type ReactNode } from 'react';
 import { byId, expectedPay, hourlyTakeHome, paycheckRecord, today } from '../engine';
 import { entity } from '../model/factory';
 import type { Bill, Category, Cents, Debt, DebtKind, Fund, HourlyPay, IncomeSource, PaidOn, PaySchedule } from '../model/types';
-import { logDebtPayment, recordPaycheck, remove, setDebtBalance, upsert } from '../store/actions';
+import { logDebtPayment, recordPaycheck, setDebtBalance, upsert } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
+import { useRemoveWithUndo } from '../state/undo';
 import { DateField, MoneyField, NumberField, SelectField, Segmented, Sheet, TextField, Toggle } from '../ui/components';
 import { WEEKDAYS, money, ordinal, weekdayDate } from '../ui/format';
 
@@ -21,10 +22,8 @@ function EditFrame({ title, canSave = true, onSave, onDelete, children }: { titl
             <button
               className="btn danger"
               onClick={() => {
-                if (confirm(`Delete this? This can't be undone.`)) {
-                  onDelete();
-                  ui.close();
-                }
+                onDelete();
+                ui.close();
               }}
             >
               Delete
@@ -79,6 +78,7 @@ type MinKind = 'unknown' | 'fixed' | 'percent';
 
 export function DebtSheet({ id }: { id?: string }) {
   const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
   const x = useDerived();
   const update = useUpdate();
   const owners = useOwners();
@@ -101,7 +101,7 @@ export function DebtSheet({ id }: { id?: string }) {
     });
 
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a debt'} canSave={d.name.trim() !== ''} onSave={save} onDelete={existing ? () => update((data) => remove(data, 'debts', existing.id)) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a debt'} canSave={d.name.trim() !== ''} onSave={save} onDelete={existing ? () => removeWithUndo('debts', existing.id, existing.name) : undefined}>
       <div className="form-grid">
         <div className="full">
           <TextField label="Name" value={d.name} onChange={(name) => set({ name })} placeholder="e.g. Chase Visa" />
@@ -225,12 +225,13 @@ export function PaymentSheet({ debtId, mode }: { debtId: string; mode: 'pay' | '
 
 export function BillSheet({ id }: { id?: string }) {
   const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
   const update = useUpdate();
   const owners = useOwners();
   const existing = id ? byId(data.bills, id) : undefined;
   const [b, set] = useDraft<Bill>(() => existing ?? entity<Bill>({ name: '', amount: 0, dueDay: 1, funding: 'due-date', owner: 'joint', autopay: true }));
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a bill'} canSave={b.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'bills', b))} onDelete={existing ? () => update((d) => remove(d, 'bills', existing.id)) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a bill'} canSave={b.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'bills', b))} onDelete={existing ? () => removeWithUndo('bills', existing.id, existing.name) : undefined}>
       <div className="form-grid">
         <div className="full">
           <TextField label="Name" value={b.name} onChange={(name) => set({ name })} placeholder="e.g. Power" />
@@ -257,6 +258,7 @@ type ScheduleKind = PaySchedule['kind'];
 
 export function IncomeSheet({ id }: { id?: string }) {
   const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
   const x = useDerived();
   const update = useUpdate();
   const owners = useOwners().filter((o) => o.value !== 'joint');
@@ -280,7 +282,7 @@ export function IncomeSheet({ id }: { id?: string }) {
   const save = () => update((d) => upsert(d, 'incomes', h ? { ...s, amount: usualTakeHome! } : { ...s, hourly: undefined }));
 
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a paycheck'} canSave={s.name.trim() !== ''} onSave={save} onDelete={existing ? () => update((d) => remove(d, 'incomes', existing.id)) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a paycheck'} canSave={s.name.trim() !== ''} onSave={save} onDelete={existing ? () => removeWithUndo('incomes', existing.id, existing.name) : undefined}>
       <div className="form-grid">
         <div className="full">
           <TextField label="Name" value={s.name} onChange={(name) => set({ name })} placeholder="e.g. Sam's paycheck" />
@@ -450,11 +452,12 @@ export function PaycheckSheet({ sourceId, payday, focus }: { sourceId: string; p
 
 export function CategorySheet({ id }: { id?: string }) {
   const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
   const update = useUpdate();
   const existing = id ? byId(data.categories, id) : undefined;
   const [c, set] = useDraft<Category>(() => existing ?? entity<Category>({ name: '', amount: 0, cadence: 'weekly' }));
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a spending budget'} canSave={c.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'categories', c))} onDelete={existing ? () => update((d) => remove(d, 'categories', existing.id)) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a spending budget'} canSave={c.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'categories', c))} onDelete={existing ? () => removeWithUndo('categories', existing.id, existing.name) : undefined}>
       <TextField label="Name" value={c.name} onChange={(name) => set({ name })} placeholder="e.g. Groceries" />
       <div className="form-grid">
         <MoneyField label="Amount" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} />
@@ -476,11 +479,12 @@ export function CategorySheet({ id }: { id?: string }) {
 
 export function FundSheet({ id }: { id?: string }) {
   const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
   const update = useUpdate();
   const existing = id ? byId(data.funds, id) : undefined;
   const [f, set] = useDraft<Fund>(() => existing ?? entity<Fund>({ name: '', kind: 'savings', balance: 0, target: null, targetDate: null, heldIn: 'separate' }));
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a savings fund'} canSave={f.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'funds', f))} onDelete={existing ? () => update((d) => remove(d, 'funds', existing.id)) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a savings fund'} canSave={f.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'funds', f))} onDelete={existing ? () => removeWithUndo('funds', existing.id, existing.name) : undefined}>
       <TextField label="Name" value={f.name} onChange={(name) => set({ name })} placeholder="e.g. Fence, Emergency fund" />
       <div className="form-grid">
         <SelectField

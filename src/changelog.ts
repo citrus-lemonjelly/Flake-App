@@ -12,6 +12,18 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.8.1',
+    date: '2026-10-24',
+    title: 'Polish and fixes',
+    items: [
+      'Fixed: editing a purchase from the day of a check-in could count it twice.',
+      'When a new version is out, a banner offers a one-tap update.',
+      'Flake notices the new day when you reopen it the next morning.',
+      'Deleting something now happens right away with Undo, instead of an "Are you sure?" pop-up.',
+      'A shorter Home on the phone: recent spending sits with your budgets, and the next milestone with your debt date.',
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-10-24',
     title: 'Setup guide and tips',

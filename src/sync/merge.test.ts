@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sampleData } from '../data/sample';
 import { emptyData } from '../model/factory';
 import type { AppData } from '../model/types';
-import { eraseAll, logSpending, patch, remove, replaceEverything, touchAll, updateSettings } from '../store/actions';
+import { eraseAll, logSpending, patch, remove, replaceEverything, restore, touchAll, updateSettings } from '../store/actions';
 import { hasLocalData, mergeRows, rowsSince } from './merge';
 
 /** Simulate the server: rows keyed by collection/id, newest edit wins (like flake_push). */
@@ -106,6 +106,22 @@ describe('sync merge', () => {
     s.push(replaced);
     const synced = mergeRows(phone, s.all()).data;
     expect(synced.debts.filter((d) => !d.deletedAt)).toHaveLength(4); // only the new set is live
+  });
+
+  it('undoing a delete brings the record back on other devices too', () => {
+    let pc = logSpending(touchAll(sampleData()), { date: '2026-11-01', amount: 4200, categoryId: null, note: 'Costco' });
+    const id = pc.spending.at(-1)!.id;
+    const s = server();
+    s.push(pc);
+    tick();
+    pc = remove(pc, 'spending', id);
+    s.push(pc);
+    const phone = mergeRows(emptyData(), s.all()).data;
+    expect(phone.spending.find((x) => x.id === id)!.deletedAt).toBeTruthy();
+    tick();
+    pc = restore(pc, 'spending', id); // Undo
+    s.push(pc);
+    expect(mergeRows(phone, s.all()).data.spending.find((x) => x.id === id)!.deletedAt).toBeUndefined();
   });
 
   it('ignores rows from unknown collections', () => {

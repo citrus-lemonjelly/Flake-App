@@ -3,6 +3,7 @@ import type { AppData } from '../model/types';
 import { Store } from '../store/store';
 import { applyTheme, type ResolvedMode } from '../theme/palettes';
 import { derive, type Derived } from './derive';
+import { today } from '../engine';
 
 const StoreCtx = createContext<Store | null>(null);
 
@@ -37,10 +38,37 @@ export function useUpdate(): (fn: (d: AppData) => AppData) => void {
   return (fn) => s.update(fn);
 }
 
-/** Everything the screens show, recomputed only when the data changes. */
+// Today's date, shared app-wide. A phone can leave the app open overnight, so it's
+// re-checked when the app comes back to the screen and once a minute while it's open.
+let currentDay = today();
+const dayListeners = new Set<() => void>();
+function refreshDay() {
+  const d = today();
+  if (d !== currentDay) {
+    currentDay = d;
+    for (const l of dayListeners) l();
+  }
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refreshDay());
+  setInterval(refreshDay, 60_000);
+}
+
+export function useToday(): string {
+  return useSyncExternalStore(
+    (fn) => {
+      dayListeners.add(fn);
+      return () => dayListeners.delete(fn);
+    },
+    () => currentDay,
+  );
+}
+
+/** Everything the screens show, recomputed when the data or the day changes. */
 export function useDerived(): Derived {
   const data = useData();
-  return useMemo(() => derive(data), [data]);
+  const day = useToday();
+  return useMemo(() => derive(data, day), [data, day]);
 }
 
 function systemMode(): ResolvedMode {

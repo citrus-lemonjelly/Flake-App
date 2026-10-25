@@ -81,12 +81,11 @@ export function Home() {
           <CashHero />
           <NextUp />
           <Budgets />
-          <RecentSpending />
         </div>
         <div className="stack">
           {data.settings.showDebtOnHome && <DebtCard />}
           <ComingUp />
-          <NextMilestone />
+          {!data.settings.showDebtOnHome && <NextMilestone />}
           <div className="card desk-only">
             <h3>Monthly averages</h3>
             <div className="explain" style={{ marginTop: -6, marginBottom: 10 }}>
@@ -559,6 +558,7 @@ function DebtCard() {
           </button>
         </div>
       )}
+      <NextMilestone inCard />
     </div>
   );
 }
@@ -569,7 +569,7 @@ function Budgets() {
   const ui = useUI();
   const data = useData();
   const lines = x.current?.lines.filter((l) => l.kind === 'category') ?? [];
-  if (!lines.length || !x.current) return null;
+  if (!lines.length || !x.current) return <RecentSpending />;
   const { start, end } = x.current.period;
   // Spending a check-in worked out (unsorted) comes off the budgets as a whole.
   const fromCheckIns = live(data.spending)
@@ -623,27 +623,29 @@ function Budgets() {
           <span>{money(leftOverall)}</span>
         </div>
       )}
+      <RecentEntries count={2} />
     </div>
   );
 }
 
 /** The last few things logged, with a way into the full Spending screen. */
-function RecentSpending() {
+/** The latest logged entries, newest first. Shown inside the budgets card, or on its own. */
+function RecentEntries({ count }: { count: number }) {
   const data = useData();
   const ui = useUI();
   const recent = live(data.spending)
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 3);
+    .slice(0, count);
   const label = (s: (typeof recent)[number]) => (s.inferred ? 'Found at check-in' : s.categoryId ? (byId(data.categories, s.categoryId)?.name ?? 'Removed budget') : 'Other');
   return (
-    <div className="card">
-      <h3>
-        Recent spending
+    <div className="recent">
+      <div className="row">
+        <span className="label">Recent spending</span>
         <button className="link" onClick={() => ui.go('spending')}>
-          See all
+          See all spending ›
         </button>
-      </h3>
+      </div>
       {recent.length ? (
         <ul className="list">
           {recent.map((s) => (
@@ -662,8 +664,19 @@ function RecentSpending() {
           ))}
         </ul>
       ) : (
-        <Empty>Nothing logged yet. Tap + after a purchase.</Empty>
+        <div className="explain" style={{ padding: '6px 0' }}>
+          Nothing logged yet. Tap + after a purchase.
+        </div>
       )}
+    </div>
+  );
+}
+
+/** Recent spending as its own card, for households without budgets yet. */
+function RecentSpending() {
+  return (
+    <div className="card">
+      <RecentEntries count={3} />
     </div>
   );
 }
@@ -701,13 +714,14 @@ function ComingUp() {
   );
 }
 
-function NextMilestone() {
+/** The next projected milestone: a line inside the debt card, or its own card when that's hidden. */
+function NextMilestone({ inCard }: { inCard?: boolean }) {
   const x = useDerived();
   const ui = useUI();
   const m = x.milestones.filter((v) => v.status === 'projected' && v.date).sort((a, b) => a.date!.localeCompare(b.date!))[0];
   if (!m) return null;
   return (
-    <button className="card ms-line" onClick={() => ui.go('goals')}>
+    <button className={inCard ? 'ms-line in-card' : 'card ms-line'} onClick={() => ui.go('goals')}>
       <span className="c" />
       <span className="grow">
         <span className="label" style={{ display: 'block' }}>

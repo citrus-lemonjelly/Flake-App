@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { addDays, byId, debtMonthlyPayment, live, monthRanges, periodStartsInMonth, planRange, weekRanges, weekday, type DateRange, type RangePlan } from '../engine';
 import type { Allocation, AppData, ISODate } from '../model/types';
-import { completeAllocation, remove } from '../store/actions';
+import { completeAllocation } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
+import { useRemoveWithUndo } from '../state/undo';
 import { Bar, Empty, Segmented } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { WEEKDAYS, minus, money, monthOnly, shortDate, weekdayDate } from '../ui/format';
@@ -115,6 +116,7 @@ export function Plan() {
 
 function PaycheckView() {
   const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
   const x = useDerived();
   const update = useUpdate();
   const ui = useUI();
@@ -249,7 +251,7 @@ function PaycheckView() {
                         <button className="icon-btn" aria-label="Mark done" title="Mark done" onClick={() => update((d) => completeAllocation(d, a.id, x.today))}>
                           <Icon name="check" size={16} />
                         </button>
-                        <button className="icon-btn" aria-label="Remove" title="Remove" onClick={() => update((d) => remove(d, 'allocations', a.id))}>
+                        <button className="icon-btn" aria-label="Remove" title="Remove" onClick={() => removeWithUndo('allocations', a.id, `${money(a.amount)} assignment`)}>
                           <Icon name="trash" size={16} />
                         </button>
                       </>
@@ -287,7 +289,7 @@ function PaycheckView() {
                       </div>
                     </div>
                     <span>{money(s.amount)}</span>
-                    <button className="icon-btn" aria-label="Delete" onClick={() => update((d) => remove(d, 'spending', s.id))}>
+                    <button className="icon-btn" aria-label="Delete" onClick={() => removeWithUndo('spending', s.id, money(s.amount))}>
                       <Icon name="trash" size={16} />
                     </button>
                   </li>
@@ -350,6 +352,7 @@ function explainRangeLine(data: AppData, r: RangePlan, l: PlanLine): string {
 
 function RangeView({ kind }: { kind: 'week' | 'month' }) {
   const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
   const x = useDerived();
   const update = useUpdate();
   const ui = useUI();
@@ -541,7 +544,7 @@ function RangeView({ kind }: { kind: 'week' | 'month' }) {
                       </div>
                     </div>
                     <span>{money(s.amount)}</span>
-                    <button className="icon-btn" aria-label="Delete" onClick={() => update((d) => remove(d, 'spending', s.id))}>
+                    <button className="icon-btn" aria-label="Delete" onClick={() => removeWithUndo('spending', s.id, money(s.amount))}>
                       <Icon name="trash" size={16} />
                     </button>
                   </li>

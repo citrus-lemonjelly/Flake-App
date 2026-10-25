@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { addDays, addMonths, byId, live, monthRanges, payPeriods, planRange, weekRanges, type DateRange } from '../engine';
 import type { Spending as SpendingEntry } from '../model/types';
-import { remove } from '../store/actions';
-import { useData, useDerived, useUpdate } from '../state/store';
+import { useData, useDerived } from '../state/store';
+import { useRemoveWithUndo } from '../state/undo';
 import { useUI } from '../state/ui';
 import { Bar, Empty, Segmented } from '../ui/components';
 import { Icon } from '../ui/icons';
@@ -35,7 +35,7 @@ export function Spending() {
   const data = useData();
   const x = useDerived();
   const ui = useUI();
-  const update = useUpdate();
+  const removeWithUndo = useRemoveWithUndo();
   const [view, setView] = useState<View>(readView);
   const [i, setI] = useState(0);
   const [filter, setFilter] = useState<Filter>(ui.params.categoryId ?? 'all');
@@ -196,7 +196,7 @@ export function Spending() {
                       <div className="sub">{weekdayDate(r.date)}</div>
                     </div>
                     <span>+{money(r.amount)}</span>
-                    <button className="icon-btn" aria-label="Delete" onClick={() => confirm('Delete this income?') && update((d) => remove(d, 'incomeReceived', r.id))}>
+                    <button className="icon-btn" aria-label="Delete" onClick={() => removeWithUndo('incomeReceived', r.id, `${money(r.amount)} income`)}>
                       <Icon name="trash" size={16} />
                     </button>
                   </li>

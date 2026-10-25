@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { emptyData, entity } from '../model/factory';
 import type { AppData, Bill, Category, IncomeSource, PaidOn } from '../model/types';
-import { checkIn, logSpending, recordBillPayment, updateSettings } from '../store/actions';
+import { checkIn, logSpending, patch, recordBillPayment, updateSettings } from '../store/actions';
 import { estimateBalance, explainGap, safeToAssign } from './checkin';
 import { outflowsBetween } from './outflows';
 
@@ -106,6 +106,19 @@ describe('purchases logged after a same-day check-in', () => {
     const after = logSpending(data, { date: '2026-11-17', amount: 5_000, categoryId: data.categories[0]!.id });
     expect(estimateBalance(after, '2026-11-17')!.balance).toBe(295_000);
     expect(safeToday(after)).toBe(before);
+    vi.useRealTimers();
+  });
+
+  it('editing a purchase made before the check-in does not count it again', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-17T08:00:00Z'));
+    let data = logSpending(household('due-date'), { date: '2026-11-17', amount: 5_000, categoryId: null, note: 'Coffee' });
+    vi.setSystemTime(new Date('2026-11-17T09:00:00Z'));
+    data = checkIn(data, { date: '2026-11-17', balance: 300_000 }).data; // the balance already reflects the coffee
+    const before = estimateBalance(data, '2026-11-17')!.balance;
+    vi.setSystemTime(new Date('2026-11-17T18:00:00Z'));
+    data = patch(data, 'spending', data.spending[0]!.id, { note: 'Coffee with Sam' }); // an edit later that day
+    expect(estimateBalance(data, '2026-11-17')!.balance).toBe(before);
     vi.useRealTimers();
   });
 

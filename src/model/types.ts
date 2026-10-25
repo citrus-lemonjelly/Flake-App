@@ -15,9 +15,14 @@ export type Id = string;
 
 export interface Entity {
   id: Id;
-  updatedAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp of the last edit
+  /** When the record was first made; never changes. Older records fall back to updatedAt. */
+  createdAt?: string;
   deletedAt?: string; // tombstone for sync; filtered out of every calculation
 }
+
+/** When a record was first logged (stable across edits). */
+export const loggedAt = (r: Entity): string => r.createdAt ?? r.updatedAt;
 
 /** A person in the household, or 'joint'. Free text so households can rename. */
 export type Owner = string;
@@ -223,6 +228,8 @@ export interface Allocation extends Entity {
   amount: Cents;
   status: 'planned' | 'done';
   doneOn?: ISODate;
+  /** When it was marked done (stable across later edits). */
+  doneAt?: string;
   note: string;
 }
 

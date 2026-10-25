@@ -10,7 +10,8 @@ export function nowStamp(): string {
 
 /** Fill in id/updatedAt for a new record. */
 export function entity<T extends Entity>(fields: Omit<T, 'id' | 'updatedAt'> & Partial<Entity>): T {
-  return { id: newId(), updatedAt: nowStamp(), ...fields } as T;
+  const stamp = nowStamp();
+  return { id: newId(), updatedAt: stamp, createdAt: stamp, ...fields } as T;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
