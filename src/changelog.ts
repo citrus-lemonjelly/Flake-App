@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.10.0',
+    date: '2026-10-26',
+    title: 'A simpler bottom bar',
+    items: [
+      'On the phone the bottom bar is now three buttons: Menu, Home and Profile.',
+      'Menu pops up every page (Plan, Spending, Debts, Goals, Tracker) so you can jump straight to it.',
+      'Profile holds sync, your color scheme, Settings and What’s new.',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-10-26',
     title: 'Tracker',

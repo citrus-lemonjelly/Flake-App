@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { sampleData } from './data/sample';
 import { live } from './engine';
 import { setGuide } from './guide';
-import { replaceEverything, updateSettings } from './store/actions';
+import { replaceEverything } from './store/actions';
 import { importJson } from './store/storage';
-import { useData, useStore, useThemeSync, useUpdate } from './state/store';
+import { useData, useStore, useThemeSync } from './state/store';
 import { UIProvider, useUI, type Route } from './state/ui';
 import { Icon, type IconName } from './ui/icons';
-import { Segmented } from './ui/components';
-import { PALETTES } from './theme/palettes';
+import { ThemeQuick } from './ui/ThemeQuick';
 import { Home } from './screens/Home';
 import { Plan } from './screens/Plan';
 import { Spending } from './screens/Spending';
@@ -20,6 +19,7 @@ import { LogSheet } from './sheets/LogSheet';
 import { CheckInSheet } from './sheets/CheckInSheet';
 import { CelebrateSheet } from './sheets/InfoSheets';
 import { SyncSheet } from './sheets/SyncSheet';
+import { ProfileSheet } from './sheets/ProfileSheet';
 import { ChangelogSheet, hasUnseenRelease } from './sheets/ChangelogSheet';
 import { APP_VERSION } from './changelog';
 import { UpdateBanner } from './ui/UpdateBanner';
@@ -86,9 +86,6 @@ function Shell() {
   const syncStatus = useSyncStatus();
   usePayoffCelebration();
   const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, debts: <Debts />, goals: <Goals />, tracker: <Tracker />, settings: <Settings /> }[ui.route];
-  // The phone tab bar keeps five tabs; Spending opens from Home and Settings from its gear.
-  // Adding things happens from the + in each section, so the bar holds only tabs.
-  const tabs = NAV.filter((n) => n.route !== 'settings' && n.route !== 'spending');
   return (
     <div className="shell">
       <aside className="side" aria-label="Main">
@@ -117,12 +114,65 @@ function Shell() {
       </aside>
       <main className="main">{screen}</main>
       <VersionBadge />
-      <nav className="tabbar" aria-label="Main">
-        {tabs.map((n) => (
-          <TabButton key={n.route} {...n} />
-        ))}
-      </nav>
+      <PhoneBar />
     </div>
+  );
+}
+
+/** Pages reached from the phone's menu button; Home sits on the bar and Settings under Profile. */
+const MENU = NAV.filter((n) => n.route !== 'home' && n.route !== 'settings');
+
+/** The phone's bottom bar: the menu on the left, Home in the middle, Profile on the right. */
+function PhoneBar() {
+  const ui = useUI();
+  const [open, setOpen] = useState(false);
+  const inMenu = MENU.some((n) => n.route === ui.route);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+  const go = (route: Route) => {
+    setOpen(false);
+    ui.go(route);
+  };
+  return (
+    <>
+      {open && (
+        <div className="navmenu-backdrop" onClick={() => setOpen(false)}>
+          <nav className="navmenu" id="navmenu" aria-label="Pages" onClick={(e) => e.stopPropagation()}>
+            {MENU.map((n, i) => (
+              // The item nearest the button pops in first.
+              <button key={n.route} style={{ animationDelay: `${(MENU.length - 1 - i) * 35}ms` }} aria-current={ui.route === n.route ? 'page' : undefined} onClick={() => go(n.route)}>
+                <Icon name={n.icon} size={20} />
+                {n.desk}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+      <nav className="tabbar" aria-label="Main">
+        <button aria-expanded={open} aria-controls="navmenu" aria-current={inMenu && !open ? 'page' : undefined} onClick={() => setOpen((o) => !o)}>
+          <Icon name={open ? 'close' : 'menu'} />
+          {open ? 'Close' : 'Menu'}
+        </button>
+        <button aria-current={ui.route === 'home' && !open ? 'page' : undefined} onClick={() => go('home')}>
+          <Icon name="home" />
+          Home
+        </button>
+        <button
+          aria-current={ui.route === 'settings' && !open ? 'page' : undefined}
+          onClick={() => {
+            setOpen(false);
+            ui.open(<ProfileSheet />);
+          }}
+        >
+          <Icon name="profile" />
+          Profile
+        </button>
+      </nav>
+    </>
   );
 }
 
@@ -139,50 +189,6 @@ function VersionBadge() {
       }}
     >
       Flake v{APP_VERSION} · What's new{unseen && <span className="new-dot">New</span>}
-    </button>
-  );
-}
-
-/** Color scheme and light/dark, one click away in the desktop sidebar. */
-function ThemeQuick() {
-  const { settings } = useData();
-  const update = useUpdate();
-  const set = (fields: Partial<typeof settings>) => update((d) => updateSettings(d, fields));
-  return (
-    <div className="theme-quick">
-      <div className="dots" role="radiogroup" aria-label="Color scheme">
-        {PALETTES.map((p) => (
-          <button
-            key={p.id}
-            role="radio"
-            aria-checked={settings.palette === p.id}
-            aria-label={p.name}
-            title={p.name}
-            style={{ background: `linear-gradient(135deg, ${p.gradient.join(', ')})` }}
-            onClick={() => set({ palette: p.id })}
-          />
-        ))}
-      </div>
-      <Segmented
-        label="Light or dark"
-        value={settings.theme}
-        onChange={(theme) => set({ theme })}
-        options={[
-          { value: 'system', label: 'Auto' },
-          { value: 'light', label: 'Light' },
-          { value: 'dark', label: 'Dark' },
-        ]}
-      />
-    </div>
-  );
-}
-
-function TabButton({ route, label, icon }: { route: Route; label: string; icon: IconName }) {
-  const ui = useUI();
-  return (
-    <button aria-current={ui.route === route ? 'page' : undefined} onClick={() => ui.go(route)}>
-      <Icon name={icon} />
-      {label}
     </button>
   );
 }
