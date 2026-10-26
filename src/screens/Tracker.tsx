@@ -7,6 +7,7 @@ import { Bar, Empty, Pill, Segmented } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { money, monthYear, shortDate } from '../ui/format';
 import { DebtSheet, FundSheet } from '../sheets/EditSheets';
+import { LogSheet } from '../sheets/LogSheet';
 import { DebtTrackSheet, FundTrackSheet, debtOutlook } from '../sheets/TrackSheets';
 import { ScreenTip } from '../ui/ScreenTip';
 import { KIND_LABEL } from './Debts';
@@ -56,6 +57,11 @@ export function Tracker() {
           <div className="sub">
             {money(owed, true)} owed · {money(saved, true)} saved
           </div>
+        </div>
+        <div className="actions">
+          <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
+            + Log spending
+          </button>
         </div>
       </header>
 

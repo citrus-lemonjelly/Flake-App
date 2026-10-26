@@ -20,6 +20,7 @@ export const CHANGELOG: Release[] = [
       'Tap one to follow it by itself: how much is paid or saved, its projected balance, and every payment or deposit so far.',
       'Savings goals without a due date show when they’ll get there at your last three months’ pace.',
       'The floating + is gone from the phone’s bottom bar. Each section now has its own + (Log on budgets and spending, Add on debts and goals), so the bar holds just the tabs.',
+      'A Log spending button sits at the top of Home and the Tracker.',
     ],
   },
   {

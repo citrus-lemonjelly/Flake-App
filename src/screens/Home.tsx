@@ -64,8 +64,11 @@ export function Home() {
             </div>
           )}
         </div>
-        <div className="actions phone-only">
-          <button className="icon-btn" aria-label="Settings" onClick={() => ui.go('settings')}>
+        <div className="actions">
+          <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
+            + Log spending
+          </button>
+          <button className="icon-btn phone-only" aria-label="Settings" onClick={() => ui.go('settings')}>
             <Icon name="settings" size={18} />
           </button>
         </div>
