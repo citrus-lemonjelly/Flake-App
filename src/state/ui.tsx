@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
-export type Route = 'home' | 'plan' | 'spending' | 'debts' | 'goals' | 'settings';
+export type Route = 'home' | 'plan' | 'spending' | 'debts' | 'goals' | 'tracker' | 'settings';
 
 /** Optional state handed to a screen when navigating, e.g. a budget to filter Spending by. */
 export interface RouteParams {
@@ -33,7 +33,7 @@ export function useUI(): UI {
 
 function initialRoute(): Route {
   const h = location.hash.slice(1);
-  return (['home', 'plan', 'spending', 'debts', 'goals', 'settings'] as const).find((r) => r === h) ?? 'home';
+  return (['home', 'plan', 'spending', 'debts', 'goals', 'tracker', 'settings'] as const).find((r) => r === h) ?? 'home';
 }
 
 export function UIProvider({ children }: { children: ReactNode }) {

@@ -14,6 +14,7 @@ import { Plan } from './screens/Plan';
 import { Spending } from './screens/Spending';
 import { Debts } from './screens/Debts';
 import { Goals } from './screens/Goals';
+import { Tracker } from './screens/Tracker';
 import { Settings } from './screens/Settings';
 import { LogSheet } from './sheets/LogSheet';
 import { CheckInSheet } from './sheets/CheckInSheet';
@@ -30,6 +31,7 @@ const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
   { route: 'spending', label: 'Spending', desk: 'Spending', icon: 'receipt' },
   { route: 'debts', label: 'Debts', desk: 'Debts & house', icon: 'debts' },
   { route: 'goals', label: 'Goals', desk: 'Goals & savings', icon: 'goals' },
+  { route: 'tracker', label: 'Tracker', desk: 'Tracker', icon: 'track' },
   { route: 'settings', label: 'Settings', desk: 'Settings', icon: 'settings' },
 ];
 
@@ -83,8 +85,8 @@ function Shell() {
   const ui = useUI();
   const syncStatus = useSyncStatus();
   usePayoffCelebration();
-  const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, debts: <Debts />, goals: <Goals />, settings: <Settings /> }[ui.route];
-  // The phone tab bar keeps four tabs; Spending opens from Home and Settings from its gear.
+  const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, debts: <Debts />, goals: <Goals />, tracker: <Tracker />, settings: <Settings /> }[ui.route];
+  // The phone tab bar keeps five tabs; Spending opens from Home and Settings from its gear.
   const tabs = NAV.filter((n) => n.route !== 'settings' && n.route !== 'spending');
   return (
     <div className="shell">

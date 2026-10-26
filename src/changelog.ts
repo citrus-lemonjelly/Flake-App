@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.9.0',
+    date: '2026-10-26',
+    title: 'Tracker',
+    items: [
+      'A Tracker tab lists every debt and savings goal on its own row, with its progress and estimated finish date.',
+      'Tap one to follow it by itself: how much is paid or saved, its projected balance, and every payment or deposit so far.',
+      'Savings goals without a due date show when they’ll get there at your last three months’ pace.',
+    ],
+  },
+  {
     version: '0.8.1',
     date: '2026-10-24',
     title: 'Polish and fixes',

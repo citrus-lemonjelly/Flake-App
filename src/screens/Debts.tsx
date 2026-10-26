@@ -18,7 +18,7 @@ const STRATEGIES: { value: Strategy; label: string; long: string }[] = [
   { value: 'custom', label: 'My order', long: 'Your order' },
 ];
 
-const KIND_LABEL: Record<Debt['kind'], string> = {
+export const KIND_LABEL: Record<Debt['kind'], string> = {
   'credit-card': 'Card',
   auto: 'Car loan',
   loan: 'Loan',
