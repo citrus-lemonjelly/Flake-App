@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { addDays, byId, debtMonthlyPayment, live, monthRanges, periodStartsInMonth, planRange, weekRanges, weekday, type DateRange, type RangePlan } from '../engine';
-import type { Allocation, AppData, ISODate } from '../model/types';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { addDays, addMonths, byId, debtMonthlyPayment, live, monthRanges, periodStartsInMonth, planPeriods, planRange, weekRanges, weekday, type DateRange, type RangePlan } from '../engine';
+import type { Allocation, AppData, ISODate, Spending } from '../model/types';
 import { completeAllocation } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
@@ -8,6 +8,7 @@ import { useRemoveWithUndo } from '../state/undo';
 import { Bar, Empty, Segmented } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { WEEKDAYS, minus, money, monthOnly, shortDate, weekdayDate } from '../ui/format';
+import { SpendingSheet } from '../sheets/SpendingSheet';
 import { AssignSheet } from '../sheets/AssignSheet';
 import { LogSheet } from '../sheets/LogSheet';
 import { BillSheet, CategorySheet, DebtSheet, FundSheet } from '../sheets/EditSheets';
@@ -58,6 +59,8 @@ function explainLine(data: AppData, plan: PeriodPlan, l: PlanLine): string {
 }
 
 type PlanView = 'paycheck' | 'week' | 'month';
+/** How many earlier paychecks, weeks and months the tabs reach back. */
+const PAST = { paycheck: 3, week: 4, month: 3 };
 const VIEW_KEY = 'flake.plan.view';
 
 function readPref(key: string, fallback: string): string {
@@ -76,7 +79,8 @@ function writePref(key: string, value: string) {
   }
 }
 
-export function Plan() {
+/** Where the money goes, by paycheck, week or month: what comes in, bills, budgets with every purchase, and the pot. */
+export function Money() {
   const [view, setView] = useState<PlanView>(() => {
     const v = readPref(VIEW_KEY, 'month');
     return v === 'paycheck' || v === 'week' ? v : 'month';
@@ -85,22 +89,28 @@ export function Plan() {
     setView(v);
     writePref(VIEW_KEY, v);
   };
+  const ui = useUI();
   const SUB: Record<PlanView, string> = {
-    paycheck: 'What each paycheck pays for',
-    week: 'What comes in and goes out each week',
-    month: 'What comes in and goes out each month',
+    paycheck: 'What each paycheck pays for, and what you’ve spent',
+    week: 'What comes in, goes out and gets spent each week',
+    month: 'What comes in, goes out and gets spent each month',
   };
   return (
     <>
       <header className="page-head">
         <div>
-          <h1>Plan</h1>
+          <h1>Money</h1>
           <div className="sub">{SUB[view]}</div>
+        </div>
+        <div className="actions">
+          <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
+            + Log spending
+          </button>
         </div>
       </header>
       <div style={{ marginBottom: 12, maxWidth: 420 }}>
         <Segmented
-          label="Plan view"
+          label="Money view"
           value={view}
           onChange={choose}
           options={[
@@ -121,12 +131,20 @@ function PaycheckView() {
   const x = useDerived();
   const update = useUpdate();
   const ui = useUI();
-  const [i, setI] = useState(0);
+  const first = x.periods[0]?.period.start;
+  const periods = useMemo(() => {
+    if (!first) return [];
+    const past = planPeriods(data, addDays(first, -16 * PAST.paycheck - 20), PAST.paycheck + 3).filter((pp) => pp.period.start < first);
+    return [...past.slice(-PAST.paycheck), ...x.periods];
+  }, [data, first, x.periods]);
+  const now = periods.findIndex((pp) => pp.period.start === first);
+  const [i, setI] = useState(Math.max(0, now));
+  const [filter, setFilter] = useState<Filter>(ui.params.categoryId ?? 'all');
   const [showTip, hideTip] = useTip('plan');
-  const p = x.periods[i];
+  const p = periods[i];
   if (!p) return <Empty>Add a paycheck in Settings to see your plan.</Empty>;
 
-  const isCurrent = i === 0;
+  const isCurrent = i === now;
   const day = WEEKDAYS[data.household.weekStartsOn]!;
   const lines = (kinds: PlanLine['kind'][]) => p.lines.filter((l) => kinds.includes(l.kind));
   const total = (ls: PlanLine[]) => ls.reduce((s, l) => s + l.amount, 0);
@@ -136,25 +154,17 @@ function PaycheckView() {
   const spending = live(data.spending)
     .filter((s) => s.date >= p.period.start && s.date <= p.period.end)
     .sort((a, b) => b.date.localeCompare(a.date));
-  const spentFor = (catId: string) => spending.filter((s) => s.categoryId === catId).reduce((t, s) => t + s.amount, 0);
 
   const editLine = (l: PlanLine) =>
     ui.open(l.kind === 'bill' ? <BillSheet id={l.refId} /> : l.kind === 'debt' ? <DebtSheet id={l.refId} /> : l.kind === 'category' ? <CategorySheet id={l.refId} /> : <FundSheet id={l.refId} />);
   return (
     <>
-      <div className="period-tabs" role="tablist" aria-label="Paychecks">
-        {x.periods.map((pp, j) => (
-          <button key={pp.period.start} aria-pressed={i === j} onClick={() => setI(j)}>
-            {j === 0 ? 'Now · ' : ''}
-            {shortDate(pp.period.start)}
-          </button>
-        ))}
-      </div>
+      <PeriodTabs label="Paychecks" tabs={periods.map((pp, j) => ({ key: pp.period.start, label: `${j === now ? 'Now · ' : ''}${shortDate(pp.period.start)}` }))} i={i} onChange={setI} />
 
       {showTip ? (
         <div className="howbox">
           <b>How this works:</b> each paycheck covers the bills due before the next one arrives. Weekly budgets are counted per {day}, so a paycheck with three {day}s sets aside
-          three weeks.{' '}
+          three weeks. Tap a budget to see just its purchases.{' '}
           <button className="link" style={{ fontSize: 12 }} onClick={hideTip}>
             Got it
           </button>
@@ -176,45 +186,8 @@ function PaycheckView() {
 
           <LineCard title="Bills & payments" lines={bills} explain={(l) => explainLine(data, p, l)} total={total(bills)} onEdit={editLine} empty="No bills land in this paycheck." />
 
-          <div className="card">
-            <h3>
-              Spending budgets <span className="num">{money(total(budgets))}</span>
-            </h3>
-            {budgets.length ? (
-              <ul className="list">
-                {budgets.map((l) => {
-                  const spent = spentFor(l.refId);
-                  return (
-                    <li key={l.refId}>
-                      <button className="rowbtn" onClick={() => editLine(l)}>
-                        <div className="grow">
-                          <div className="row">
-                            <span>{l.name}</span>
-                            <span>{money(l.amount)}</span>
-                          </div>
-                          <div className="explain">{explainLine(data, p, l)}</div>
-                          {(isCurrent || spent > 0) && (
-                            <>
-                              <div style={{ marginTop: 6 }}>
-                                <Bar value={l.amount ? spent / l.amount : 0} tone={spent > l.amount ? 'warn' : undefined} />
-                              </div>
-                              <div className="explain">
-                                {money(spent, true)} spent · {spent > l.amount ? `${money(spent - l.amount, true)} over` : `${money(l.amount - spent, true)} left`}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <Empty>No spending budgets yet. Add them in Settings.</Empty>
-            )}
-          </div>
-
           {setAsides.length > 0 && <LineCard title="Set aside for planned expenses" lines={setAsides} explain={(l) => explainLine(data, p, l)} total={total(setAsides)} onEdit={editLine} empty="" />}
+          <ExtraIncomeCard start={p.period.start} end={p.period.end} />
         </div>
 
         <div className="stack">
@@ -275,39 +248,9 @@ function PaycheckView() {
             )}
           </div>
 
-          <div className="card">
-            <h3>
-              Logged spending
-              <span style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                <span className="num">{money(spending.reduce((t, s) => t + s.amount, 0))}</span>
-                {isCurrent && (
-                  <button className="link" onClick={() => ui.open(<LogSheet />)}>
-                    + Log
-                  </button>
-                )}
-              </span>
-            </h3>
-            {spending.length ? (
-              <ul className="list">
-                {spending.map((s) => (
-                  <li key={s.id}>
-                    <div className="grow">
-                      {s.note || (s.categoryId ? byId(data.categories, s.categoryId)?.name : 'Other')}
-                      <div className="sub">
-                        {weekdayDate(s.date)} · {s.categoryId ? (byId(data.categories, s.categoryId)?.name ?? 'Removed') : 'Other'}
-                      </div>
-                    </div>
-                    <span>{money(s.amount)}</span>
-                    <button className="icon-btn" aria-label="Delete" onClick={() => removeWithUndo('spending', s.id, money(s.amount))}>
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <Empty>{isCurrent ? 'Nothing logged yet. Tap + Log after a purchase.' : 'Nothing logged in this paycheck.'}</Empty>
-            )}
-          </div>
+          <BudgetsCard lines={budgets} spending={spending} explain={(l) => explainLine(data, p, l)} showSpent={p.period.start <= x.today} filter={filter} onFilter={setFilter} />
+          <EntriesCard spending={spending} budgets={budgets} filter={filter} onFilter={setFilter} canLog={isCurrent} empty={isCurrent ? 'Nothing logged yet. Tap + Log after a purchase.' : 'Nothing logged in this paycheck.'} />
+
         </div>
       </div>
     </>
@@ -361,19 +304,24 @@ function explainRangeLine(data: AppData, r: RangePlan, l: PlanLine): string {
 
 function RangeView({ kind }: { kind: 'week' | 'month' }) {
   const data = useData();
-  const removeWithUndo = useRemoveWithUndo();
   const x = useDerived();
   const update = useUpdate();
   const ui = useUI();
-  const [i, setI] = useState(0);
+  const now = PAST[kind];
+  const [i, setI] = useState(now);
+  const [filter, setFilter] = useState<Filter>(ui.params.categoryId ?? 'all');
   const [showTip, hideTip] = useTip(kind);
-  const ranges = useMemo(() => (kind === 'week' ? weekRanges(data, x.today, 8) : monthRanges(x.today, 6)), [kind, data, x.today]);
+  const ranges = useMemo(
+    () => (kind === 'week' ? weekRanges(data, addDays(x.today, -7 * now), now + 8) : monthRanges(addMonths(x.today, -now), now + 6)),
+    [kind, now, data, x.today],
+  );
   const range = ranges[i]!;
   const r = useMemo(() => planRange(data, range.start, range.end), [data, range]);
   const day = WEEKDAYS[data.household.weekStartsOn]!;
   const lastDay = WEEKDAYS[(data.household.weekStartsOn + 6) % 7]!;
   const noun = kind === 'week' ? 'week' : 'month';
-  const label = (rg: DateRange, j: number) => (kind === 'week' ? (j === 0 ? 'This week' : shortDate(rg.start)) : j === 0 ? 'This month' : monthOnly(rg.start));
+  const label = (rg: DateRange, j: number) =>
+    kind === 'week' ? (j === now ? 'This week' : j === now - 1 ? 'Last week' : shortDate(rg.start)) : j === now ? 'This month' : monthOnly(rg.start);
 
   const lines = (kinds: PlanLine['kind'][]) => r.lines.filter((l) => kinds.includes(l.kind));
   const total = (ls: PlanLine[]) => ls.reduce((s, l) => s + l.amount, 0);
@@ -383,19 +331,12 @@ function RangeView({ kind }: { kind: 'week' | 'month' }) {
   const spending = live(data.spending)
     .filter((s) => s.date >= r.start && s.date <= r.end)
     .sort((a, b) => b.date.localeCompare(a.date));
-  const spentFor = (catId: string) => spending.filter((s) => s.categoryId === catId).reduce((t, s) => t + s.amount, 0);
   const editLine = (l: PlanLine) =>
     ui.open(l.kind === 'bill' ? <BillSheet id={l.refId} /> : l.kind === 'debt' ? <DebtSheet id={l.refId} /> : l.kind === 'category' ? <CategorySheet id={l.refId} /> : <FundSheet id={l.refId} />);
 
   return (
     <>
-      <div className="period-tabs" role="tablist" aria-label={kind === 'week' ? 'Weeks' : 'Months'}>
-        {ranges.map((rg, j) => (
-          <button key={rg.start} aria-pressed={i === j} onClick={() => setI(j)}>
-            {label(rg, j)}
-          </button>
-        ))}
-      </div>
+      <PeriodTabs label={kind === 'week' ? 'Weeks' : 'Months'} tabs={ranges.map((rg, j) => ({ key: rg.start, label: label(rg, j) }))} i={i} onChange={setI} />
 
       {showTip && (
         <div className="howbox">
@@ -428,45 +369,8 @@ function RangeView({ kind }: { kind: 'week' | 'month' }) {
 
           <LineCard title="Bills & payments" lines={bills} explain={(l) => explainRangeLine(data, r, l)} total={total(bills)} onEdit={editLine} empty={`Nothing due this ${noun}.`} />
 
-          <div className="card">
-            <h3>
-              Spending budgets <span className="num">{money(total(budgets))}</span>
-            </h3>
-            {budgets.length ? (
-              <ul className="list">
-                {budgets.map((l) => {
-                  const spent = spentFor(l.refId);
-                  return (
-                    <li key={l.refId}>
-                      <button className="rowbtn" onClick={() => editLine(l)}>
-                        <div className="grow">
-                          <div className="row">
-                            <span>{l.name}</span>
-                            <span>{money(l.amount)}</span>
-                          </div>
-                          <div className="explain">{explainRangeLine(data, r, l)}</div>
-                          {r.start <= x.today && (
-                            <>
-                              <div style={{ marginTop: 6 }}>
-                                <Bar value={l.amount ? spent / l.amount : 0} tone={spent > l.amount ? 'warn' : undefined} />
-                              </div>
-                              <div className="explain">
-                                {money(spent, true)} spent · {spent > l.amount ? `${money(spent - l.amount, true)} over` : `${money(l.amount - spent, true)} left`}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <Empty>No spending budgets yet. Add them in Settings.</Empty>
-            )}
-          </div>
-
           {setAsides.length > 0 && <LineCard title="Set aside for planned expenses" lines={setAsides} explain={(l) => explainRangeLine(data, r, l)} total={total(setAsides)} onEdit={editLine} empty="" />}
+          <ExtraIncomeCard start={r.start} end={r.end} />
         </div>
 
         <div className="stack">
@@ -538,41 +442,226 @@ function RangeView({ kind }: { kind: 'week' | 'month' }) {
             )}
           </div>
 
-          <div className="card">
-            <h3>
-              Logged spending
-              <span style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                <span className="num">{money(spending.reduce((t, s) => t + s.amount, 0))}</span>
-                {i === 0 && (
-                  <button className="link" onClick={() => ui.open(<LogSheet />)}>
-                    + Log
-                  </button>
-                )}
-              </span>
-            </h3>
-            {spending.length ? (
-              <ul className="list">
-                {spending.map((s) => (
-                  <li key={s.id}>
-                    <div className="grow">
-                      {s.note || (s.categoryId ? byId(data.categories, s.categoryId)?.name : 'Other')}
-                      <div className="sub">
-                        {weekdayDate(s.date)} · {s.categoryId ? (byId(data.categories, s.categoryId)?.name ?? 'Removed') : 'Other'}
-                      </div>
-                    </div>
-                    <span>{money(s.amount)}</span>
-                    <button className="icon-btn" aria-label="Delete" onClick={() => removeWithUndo('spending', s.id, money(s.amount))}>
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <Empty>Nothing logged this {noun} yet.</Empty>
-            )}
-          </div>
+          <BudgetsCard lines={budgets} spending={spending} explain={(l) => explainRangeLine(data, r, l)} showSpent={r.start <= x.today} filter={filter} onFilter={setFilter} />
+          <EntriesCard spending={spending} budgets={budgets} filter={filter} onFilter={setFilter} canLog={r.start <= x.today && x.today <= r.end} empty={`Nothing logged this ${noun} yet.`} />
+
+          {kind === 'month' && (
+            <div className="card">
+              <h3>Monthly averages</h3>
+              <div className="explain" style={{ marginTop: -6, marginBottom: 10 }}>
+                A full-year average, so months with an extra payday are counted fairly.
+              </div>
+              <div className="kpis">
+                <div>
+                  <div className="label">Income</div>
+                  <div className="v">{money(x.averages.income, true)}</div>
+                </div>
+                <div>
+                  <div className="label">Bills, payments & budgets</div>
+                  <div className="v">{money(x.averages.outflow, true)}</div>
+                </div>
+                <div>
+                  <div className="label">Into the pot</div>
+                  <div className="v">{money(x.averages.leftover, true)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </>
+  );
+}
+
+/** 'all', a budget's id, 'other' (logged outside budgets), or 'checkin' (worked out at check-ins). */
+type Filter = string;
+
+/** Where a purchase belongs for filtering. */
+const bucket = (s: Spending): Filter => (s.inferred ? 'checkin' : (s.categoryId ?? 'other'));
+
+/** Paychecks, weeks or months as tabs, earlier ones to the left; the chosen one scrolls into view. */
+function PeriodTabs({ label, tabs, i, onChange }: { label: string; tabs: { key: string; label: string }[]; i: number; onChange: (i: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const row = ref.current;
+    const tab = row?.children[i] as HTMLElement | undefined;
+    if (row && tab) row.scrollLeft = tab.offsetLeft - (row.clientWidth - tab.offsetWidth) / 2;
+  }, [i]);
+  return (
+    <div className="period-tabs" role="tablist" aria-label={label} ref={ref}>
+      {tabs.map((t, j) => (
+        <button key={t.key} aria-pressed={i === j} onClick={() => onChange(j)}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Each budget with what's been spent from it; tap one to show only its purchases. */
+function BudgetsCard({ lines, spending, explain, showSpent, filter, onFilter }: { lines: PlanLine[]; spending: Spending[]; explain: (l: PlanLine) => string; showSpent: boolean; filter: Filter; onFilter: (f: Filter) => void }) {
+  const total = (f: Filter) => spending.filter((s) => bucket(s) === f).reduce((t, s) => t + s.amount, 0);
+  const toggle = (f: Filter) => onFilter(filter === f ? 'all' : f);
+  const other = total('other');
+  const fromCheckIns = total('checkin');
+  return (
+    <div className="card">
+      <h3>
+        Spending budgets <span className="num">{money(lines.reduce((t, l) => t + l.amount, 0))}</span>
+      </h3>
+      {lines.length || other || fromCheckIns ? (
+        <ul className="list">
+          {lines.map((l) => {
+            const spent = total(l.refId);
+            return (
+              <li key={l.refId} className={filter === l.refId ? 'picked' : ''}>
+                <button className="rowbtn" aria-pressed={filter === l.refId} onClick={() => toggle(l.refId)}>
+                  <div className="grow">
+                    <div className="row">
+                      <span style={{ fontWeight: filter === l.refId ? 700 : 400 }}>{l.name}</span>
+                      <span>{money(l.amount)}</span>
+                    </div>
+                    <div className="explain">{explain(l)}</div>
+                    {(showSpent || spent > 0) && (
+                      <>
+                        <div style={{ marginTop: 6 }}>
+                          <Bar value={l.amount ? spent / l.amount : 0} tone={spent > l.amount ? 'warn' : undefined} />
+                        </div>
+                        <div className="explain">
+                          {money(spent, true)} spent · {spent > l.amount ? `${money(spent - l.amount, true)} over` : `${money(l.amount - spent, true)} left`}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+          {other > 0 && (
+            <li className={filter === 'other' ? 'picked' : ''}>
+              <button className="rowbtn" aria-pressed={filter === 'other'} onClick={() => toggle('other')}>
+                <div className="grow">
+                  Other<div className="explain">Not from a budget, so it came out of Safe to spend</div>
+                </div>
+                <span>{money(other)}</span>
+              </button>
+            </li>
+          )}
+          {fromCheckIns > 0 && (
+            <li className={filter === 'checkin' ? 'picked' : ''}>
+              <button className="rowbtn" aria-pressed={filter === 'checkin'} onClick={() => toggle('checkin')}>
+                <div className="grow">
+                  Found at check-ins<div className="explain">Spending your balance showed; tap an entry to sort it into a budget</div>
+                </div>
+                <span>{money(fromCheckIns)}</span>
+              </button>
+            </li>
+          )}
+        </ul>
+      ) : (
+        <Empty>No spending budgets yet. Add them in Settings.</Empty>
+      )}
+    </div>
+  );
+}
+
+/** Every purchase in the stretch by day, filtered by budget; tap one to fix it or sort it into a budget. */
+function EntriesCard({ spending, budgets, filter, onFilter, canLog, empty }: { spending: Spending[]; budgets: PlanLine[]; filter: Filter; onFilter: (f: Filter) => void; canLog: boolean; empty: string }) {
+  const data = useData();
+  const ui = useUI();
+  const shown = filter === 'all' ? spending : spending.filter((s) => bucket(s) === filter);
+  const nameOf = (s: Spending) => (s.inferred ? 'Found at check-in' : s.categoryId ? (byId(data.categories, s.categoryId)?.name ?? 'Removed budget') : 'Other');
+  // Chips: every budget in the plan, plus any other bucket that has spending.
+  const chips = [...new Set([...budgets.map((l) => l.refId), ...spending.map(bucket)])].map((f) => ({
+    f,
+    label: f === 'other' ? 'Other' : f === 'checkin' ? 'From check-ins' : (byId(data.categories, f)?.name ?? 'Removed budget'),
+  }));
+  const picked = filter !== 'all' && filter !== 'other' && filter !== 'checkin' ? byId(data.categories, filter) : undefined;
+  const days = new Map<string, Spending[]>();
+  for (const s of shown) days.set(s.date, [...(days.get(s.date) ?? []), s]);
+  const chip = (f: Filter, label: string) => (
+    <button key={f} className="chip" aria-pressed={filter === f} onClick={() => onFilter(f)}>
+      {label}
+    </button>
+  );
+  return (
+    <div className="card">
+      <h3>
+        Spending
+        <span style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          <span className="num">{money(shown.reduce((t, s) => t + s.amount, 0))}</span>
+          {picked && (
+            <button className="link" onClick={() => ui.open(<CategorySheet id={picked.id} />)}>
+              Edit budget
+            </button>
+          )}
+          {canLog && (
+            <button className="link" onClick={() => ui.open(<LogSheet />)}>
+              + Log
+            </button>
+          )}
+        </span>
+      </h3>
+      {chips.length > 0 && (
+        <div className="chips" style={{ justifyContent: 'flex-start', marginTop: -4 }}>
+          {chip('all', 'All')}
+          {chips.map((c) => chip(c.f, c.label))}
+        </div>
+      )}
+      {shown.length ? (
+        [...days].map(([day, entries]) => (
+          <div key={day}>
+            <div className="label" style={{ margin: '10px 0 2px' }}>
+              {weekdayDate(day)}
+            </div>
+            <ul className="list">
+              {entries.map((s) => (
+                <li key={s.id}>
+                  <button className="rowbtn" onClick={() => ui.open(<SpendingSheet id={s.id} />)}>
+                    <div className="grow">
+                      {s.note && !s.inferred ? s.note : nameOf(s)}
+                      <div className="sub">{s.note && !s.inferred ? nameOf(s) : s.inferred ? 'Tap to sort into a budget' : ''}</div>
+                    </div>
+                    <span style={{ fontWeight: 600 }}>{money(s.amount)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      ) : (
+        <Empty>{filter === 'all' ? empty : 'Nothing here for this budget.'}</Empty>
+      )}
+    </div>
+  );
+}
+
+/** Bonuses and other money that arrived outside the regular paychecks. */
+function ExtraIncomeCard({ start, end }: { start: ISODate; end: ISODate }) {
+  const data = useData();
+  const removeWithUndo = useRemoveWithUndo();
+  const extra = live(data.incomeReceived).filter((r) => r.date >= start && r.date <= end);
+  if (!extra.length) return null;
+  return (
+    <div className="card">
+      <h3>
+        Extra income <span className="num">{money(extra.reduce((t, r) => t + r.amount, 0))}</span>
+      </h3>
+      <ul className="list">
+        {extra.map((r) => (
+          <li key={r.id}>
+            <div className="grow">
+              {r.note || 'Bonus'}
+              <div className="sub">{weekdayDate(r.date)}</div>
+            </div>
+            <span>+{money(r.amount)}</span>
+            <button className="icon-btn" aria-label="Delete" onClick={() => removeWithUndo('incomeReceived', r.id, `${money(r.amount)} income`)}>
+              <Icon name="trash" size={16} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

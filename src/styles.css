@@ -68,14 +68,13 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .side { display: none; }
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 8px 20px calc(env(safe-area-inset-bottom) + 10px);
+  display: flex; justify-content: space-around; align-items: center;
+  padding: 8px 12px calc(env(safe-area-inset-bottom) + 10px);
   background: color-mix(in oklab, var(--surface) 86%, transparent);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--line);
 }
 .tabbar button { border: 0; background: none; color: var(--ink3); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 500; padding: 4px 6px; min-width: 64px; }
-.tabbar button[aria-expanded='true'] { color: var(--ink); }
 .tabbar button[aria-current='page'] { color: var(--accent); }
 
 @media (min-width: 960px) {
@@ -112,20 +111,6 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .theme-quick .dots button { width: 24px; height: 24px; border-radius: 50%; border: 0; padding: 0; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px transparent; transition: box-shadow 0.15s; }
 .theme-quick .dots button[aria-checked='true'] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
 
-/* Phone menu: page buttons pop up from the menu button, nearest first. */
-.navmenu-backdrop { position: fixed; inset: 0; z-index: 19; background: rgba(8, 9, 14, 0.35); animation: fade 0.15s; }
-.navmenu { position: fixed; left: 14px; bottom: calc(env(safe-area-inset-bottom) + 78px); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.navmenu button {
-  display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 999px; padding: 10px 18px 10px 14px;
-  background: var(--surface); color: var(--ink); font-size: 15px; font-weight: 600; box-shadow: 0 6px 20px rgba(8, 9, 14, 0.18);
-  opacity: 0; transform: translateY(14px) scale(0.94); transform-origin: left bottom;
-  animation: menu-pop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-.navmenu button svg { color: var(--ink3); }
-.navmenu button[aria-current='page'] { background: var(--accent-soft); color: var(--accent); }
-.navmenu button[aria-current='page'] svg { color: var(--accent); }
-@keyframes menu-pop { to { opacity: 1; transform: none; } }
-
 /* Profile sheet */
 .profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
 .avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--grad); color: #fff; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 19px; flex: none; }
@@ -160,6 +145,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .list > li:first-child { border-top: 0; }
 .list .grow { flex: 1; min-width: 0; }
 .list .sub { font-size: 12px; color: var(--ink3); }
+.list > li.picked { background: color-mix(in oklab, var(--accent) 5%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent); margin: 0 -10px; padding-left: 10px; padding-right: 10px; border-radius: 12px; }
 .list button.rowbtn { all: unset; display: flex; align-items: center; gap: 12px; width: 100%; cursor: pointer; }
 .dot { width: 34px; height: 34px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; background: var(--surface2); color: var(--ink2); }
 .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface2); color: var(--ink2); white-space: nowrap; }
@@ -422,7 +408,6 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .release li { margin: 3px 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .navmenu button { animation: none; opacity: 1; transform: none; }
   .side button.nav, .side button.nav::before, .side button.nav svg { transition: none; }
   .side button.nav:hover svg { transform: none; }
 }

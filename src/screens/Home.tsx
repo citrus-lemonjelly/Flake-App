@@ -4,7 +4,7 @@ import { completeAllocation, recordPaycheck } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import type { Derived } from '../state/derive';
-import { Bar, Empty, SegBar, type Segment } from '../ui/components';
+import { Bar, Empty, type Segment } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { STRATEGY_LABEL, minus, money, monthOnly, monthYear, monthsBetween, shortDate, weekdayDate, weekdayShort } from '../ui/format';
 import { AssignSheet } from '../sheets/AssignSheet';
@@ -80,32 +80,11 @@ export function Home() {
           <GettingStarted />
           <CashHero />
           <NextUp />
-          <Budgets />
         </div>
         <div className="stack">
+          <Budgets />
           {data.settings.showDebtOnHome && <DebtCard />}
-          <ComingUp />
           {!data.settings.showDebtOnHome && <NextMilestone />}
-          <div className="card desk-only">
-            <h3>Monthly averages</h3>
-            <div className="explain" style={{ marginTop: -6, marginBottom: 10 }}>
-              A full-year average, so months with an extra payday are counted fairly.
-            </div>
-            <div className="kpis">
-              <div>
-                <div className="label">Income</div>
-                <div className="v">{money(x.averages.income, true)}</div>
-              </div>
-              <div>
-                <div className="label">Bills, payments & budgets</div>
-                <div className="v">{money(x.averages.outflow, true)}</div>
-              </div>
-              <div>
-                <div className="label">Into the pot</div>
-                <div className="v">{money(x.averages.leftover, true)}</div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </>
@@ -515,8 +494,8 @@ function NextUp() {
           <button className="btn" style={{ flex: 1 }} onClick={() => update((d) => completeAllocation(d, n.allocationId, x.today))}>
             Yes, mark done
           </button>
-          <button className="btn ghost" style={{ flex: 1 }} onClick={() => ui.go('plan')}>
-            See plan
+          <button className="btn ghost" style={{ flex: 1 }} onClick={() => ui.go('money')}>
+            Open Money
           </button>
         </div>
       </div>
@@ -525,7 +504,7 @@ function NextUp() {
   return null;
 }
 
-/** Second in line: the estimated debt-free date, large, with what it rests on. */
+/** The estimated debt-free date at a glance; the payoff order and every debt live on Progress. */
 function DebtCard() {
   const data = useData();
   const x = useDerived();
@@ -541,7 +520,12 @@ function DebtCard() {
   const allPaid = x.planTotal === 0;
   return (
     <div className="card debt-home">
-      <div className="label">{allPaid ? 'Debt-free' : 'Estimated debt-free'}</div>
+      <div className="row">
+        <span className="label">{allPaid ? 'Debt-free' : 'Estimated debt-free'}</span>
+        <button className="link" onClick={() => ui.go('progress')}>
+          See progress ›
+        </button>
+      </div>
       <div className="date">{allPaid ? 'Done 🎉' : x.sim.debtFreeDate ? monthYear(x.sim.debtFreeDate) : 'Not within 50 years'}</div>
       {!allPaid && (
         <div className="faint" style={{ fontSize: 14 }}>
@@ -549,7 +533,6 @@ function DebtCard() {
           {money(x.planTotal, true)} to go
         </div>
       )}
-      <SegBar segments={debtSegments(x)} />
       {!allPaid && (
         <div className="assume">
           <span>{basisText(x, data.settings.monthlyExtraForDebt)}</span>
@@ -590,7 +573,7 @@ function Budgets() {
           const left = l.amount - spent;
           return (
             <li key={l.refId}>
-              <button className="rowbtn" onClick={() => ui.go('spending', { categoryId: l.refId })} aria-label={`${l.name} spending`}>
+              <button className="rowbtn" onClick={() => ui.go('money', { categoryId: l.refId })} aria-label={`${l.name} spending`}>
                 <div className="grow">
                   <div className="row" style={{ fontSize: 14 }}>
                     <span>{l.name}</span>
@@ -628,7 +611,7 @@ function Budgets() {
   );
 }
 
-/** The last few things logged, with a way into the full Spending screen. */
+/** The last few things logged, with a way into Money. */
 /** The latest logged entries, newest first. Shown inside the budgets card, or on its own. */
 function RecentEntries({ count, log }: { count: number; log?: boolean }) {
   const data = useData();
@@ -648,7 +631,7 @@ function RecentEntries({ count, log }: { count: number; log?: boolean }) {
               + Log
             </button>
           )}
-          <button className="link" onClick={() => ui.go('spending')}>
+          <button className="link" onClick={() => ui.go('money')}>
             See all spending ›
           </button>
         </span>
@@ -684,39 +667,6 @@ function RecentSpending() {
   return (
     <div className="card">
       <RecentEntries count={3} log />
-    </div>
-  );
-}
-
-function ComingUp() {
-  const x = useDerived();
-  const ui = useUI();
-  return (
-    <div className="card">
-      <h3>
-        Coming up
-        <button className="link" onClick={() => ui.go('plan')}>
-          See all
-        </button>
-      </h3>
-      {x.upcoming.length ? (
-        <ul className="list">
-          {x.upcoming.slice(0, 3).map((u, i) => (
-            <li key={i}>
-              <div className="grow">
-                {u.name}
-                <div className="sub">
-                  {weekdayDate(u.date)}
-                  {u.date !== u.dueDate && ` · with that paycheck, due ${shortDate(u.dueDate)}`}
-                </div>
-              </div>
-              <span style={{ fontWeight: 600 }}>{money(u.amount)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Empty>Nothing due in the next three weeks.</Empty>
-      )}
     </div>
   );
 }

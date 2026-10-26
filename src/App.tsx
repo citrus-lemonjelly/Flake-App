@@ -9,8 +9,7 @@ import { UIProvider, useUI, type Route } from './state/ui';
 import { Icon, type IconName } from './ui/icons';
 import { ThemeQuick } from './ui/ThemeQuick';
 import { Home } from './screens/Home';
-import { Plan } from './screens/Plan';
-import { Spending } from './screens/Spending';
+import { Money } from './screens/Money';
 import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
 import { LogSheet } from './sheets/LogSheet';
@@ -24,9 +23,8 @@ import { UpdateBanner } from './ui/UpdateBanner';
 import { syncLabel, useSyncStatus } from './state/sync';
 
 const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
-  { route: 'home', label: 'Home', desk: 'Dashboard', icon: 'home' },
-  { route: 'plan', label: 'Plan', desk: 'Plan', icon: 'plan' },
-  { route: 'spending', label: 'Spending', desk: 'Spending', icon: 'receipt' },
+  { route: 'home', label: 'Home', desk: 'Home', icon: 'home' },
+  { route: 'money', label: 'Money', desk: 'Money', icon: 'money' },
   { route: 'progress', label: 'Progress', desk: 'Progress', icon: 'goals' },
   { route: 'settings', label: 'Settings', desk: 'Settings', icon: 'settings' },
 ];
@@ -81,7 +79,7 @@ function Shell() {
   const ui = useUI();
   const syncStatus = useSyncStatus();
   usePayoffCelebration();
-  const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, progress: <Progress />, settings: <Settings /> }[ui.route];
+  const screen = { home: <Home />, money: <Money />, progress: <Progress />, settings: <Settings /> }[ui.route];
   return (
     <div className="shell">
       <aside className="side" aria-label="Main">
@@ -115,60 +113,22 @@ function Shell() {
   );
 }
 
-/** Pages reached from the phone's menu button; Home sits on the bar and Settings under Profile. */
-const MENU = NAV.filter((n) => n.route !== 'home' && n.route !== 'settings');
-
-/** The phone's bottom bar: the menu on the left, Home in the middle, Profile on the right. */
+/** The phone's bottom bar: the three pages, then Profile (which holds Settings). */
 function PhoneBar() {
   const ui = useUI();
-  const [open, setOpen] = useState(false);
-  const inMenu = MENU.some((n) => n.route === ui.route);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open]);
-  const go = (route: Route) => {
-    setOpen(false);
-    ui.go(route);
-  };
   return (
-    <>
-      {open && (
-        <div className="navmenu-backdrop" onClick={() => setOpen(false)}>
-          <nav className="navmenu" id="navmenu" aria-label="Pages" onClick={(e) => e.stopPropagation()}>
-            {MENU.map((n, i) => (
-              // The item nearest the button pops in first.
-              <button key={n.route} style={{ animationDelay: `${(MENU.length - 1 - i) * 35}ms` }} aria-current={ui.route === n.route ? 'page' : undefined} onClick={() => go(n.route)}>
-                <Icon name={n.icon} size={20} />
-                {n.desk}
-              </button>
-            ))}
-          </nav>
-        </div>
-      )}
-      <nav className="tabbar" aria-label="Main">
-        <button aria-expanded={open} aria-controls="navmenu" aria-current={inMenu && !open ? 'page' : undefined} onClick={() => setOpen((o) => !o)}>
-          <Icon name={open ? 'close' : 'menu'} />
-          {open ? 'Close' : 'Menu'}
+    <nav className="tabbar" aria-label="Main">
+      {NAV.filter((n) => n.route !== 'settings').map((n) => (
+        <button key={n.route} aria-current={ui.route === n.route ? 'page' : undefined} onClick={() => ui.go(n.route)}>
+          <Icon name={n.icon} />
+          {n.label}
         </button>
-        <button aria-current={ui.route === 'home' && !open ? 'page' : undefined} onClick={() => go('home')}>
-          <Icon name="home" />
-          Home
-        </button>
-        <button
-          aria-current={ui.route === 'settings' && !open ? 'page' : undefined}
-          onClick={() => {
-            setOpen(false);
-            ui.open(<ProfileSheet />);
-          }}
-        >
-          <Icon name="profile" />
-          Profile
-        </button>
-      </nav>
-    </>
+      ))}
+      <button aria-current={ui.route === 'settings' ? 'page' : undefined} onClick={() => ui.open(<ProfileSheet />)}>
+        <Icon name="profile" />
+        Profile
+      </button>
+    </nav>
   );
 }
 

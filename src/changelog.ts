@@ -12,6 +12,18 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.12.0',
+    date: '2026-10-26',
+    title: 'Money: your plan and spending in one place',
+    items: [
+      'Plan and Spending are now one Money page, by paycheck, week or month.',
+      'Tap a budget to see just its purchases; tap a purchase to fix it or sort it into a budget.',
+      'The tabs reach back to earlier paychecks, weeks and months as well as ahead.',
+      'The phone’s bottom bar is now Home, Money, Progress and Profile, so every page is one tap away.',
+      'Home is shorter: safe to spend, what to do next, your budgets and the debt-free date. Upcoming bills are in Money, and monthly averages in its Month view.',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-10-26',
     title: 'Progress: debts and goals in one place',

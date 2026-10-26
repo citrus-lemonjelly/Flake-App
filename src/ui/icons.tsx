@@ -22,7 +22,6 @@ const paths = {
     </>
   ),
   close: <path d="M6 6l12 12M18 6L6 18" />,
-  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   profile: (
     <>
       <circle cx="12" cy="8" r="4" />
@@ -38,6 +37,12 @@ const paths = {
     <>
       <path d="M12 3l10 18H2z" />
       <path d="M12 10v5M12 18v.5" />
+    </>
+  ),
+  money: (
+    <>
+      <rect x="2.5" y="6" width="19" height="13" rx="2.5" />
+      <path d="M2.5 10.5h19M16.5 15h1.5" />
     </>
   ),
   receipt: <path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3" />,
