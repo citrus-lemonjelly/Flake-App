@@ -44,7 +44,6 @@ const paths = {
   bank: <path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18" />,
   trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
   house: <path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-5h4v5" />,
-  track: <path d="M10 6h10M10 12h10M10 18h10M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17" />,
 };
 
 export type IconName = keyof typeof paths;

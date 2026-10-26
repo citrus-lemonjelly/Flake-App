@@ -6,6 +6,7 @@ import { useUI } from '../state/ui';
 import { MoneyField, Sheet } from '../ui/components';
 import { STRATEGY_LABEL, minus, money, monthYear, shortDate } from '../ui/format';
 import { DebtSheet } from './EditSheets';
+import { PayoffSheet } from './PayoffSheet';
 import { confirmStep } from '../guide';
 
 /** Definitions for the two numbers people act on: Safe to spend and the pot. */
@@ -112,10 +113,7 @@ export function AssumptionsSheet() {
       footer={
         <button
           className="btn primary"
-          onClick={() => {
-            ui.close();
-            ui.go('debts');
-          }}
+          onClick={() => ui.open(<PayoffSheet />)}
         >
           Open payoff plan
         </button>

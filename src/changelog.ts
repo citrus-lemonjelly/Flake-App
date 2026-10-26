@@ -12,6 +12,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.11.0',
+    date: '2026-10-26',
+    title: 'Progress: debts and goals in one place',
+    items: [
+      'Debts, Goals and Tracker are now one Progress page.',
+      'Milestones run along the top; every debt and savings goal has its own row to tap into.',
+      'The payoff plan shows its order and balance chart; tap Change to pick a strategy or the extra each month.',
+      'The house’s “pay extra principal” calculator now lives on the mortgage’s own page.',
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-10-26',
     title: 'A simpler bottom bar',

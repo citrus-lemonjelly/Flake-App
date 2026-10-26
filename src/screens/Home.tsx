@@ -534,7 +534,7 @@ function DebtCard() {
     return (
       <div className="card">
         <div className="label">Estimated debt-free</div>
-        <Empty>Add your cards and loans under Debts to see a payoff date.</Empty>
+        <Empty>Add your cards and loans under Progress to see a payoff date.</Empty>
       </div>
     );
   const months = x.sim.debtFreeDate ? Math.max(0, monthsBetween(x.today, x.sim.debtFreeDate)) : null;
@@ -728,7 +728,7 @@ function NextMilestone({ inCard }: { inCard?: boolean }) {
   const m = x.milestones.filter((v) => v.status === 'projected' && v.date).sort((a, b) => a.date!.localeCompare(b.date!))[0];
   if (!m) return null;
   return (
-    <button className={inCard ? 'ms-line in-card' : 'card ms-line'} onClick={() => ui.go('goals')}>
+    <button className={inCard ? 'ms-line in-card' : 'card ms-line'} onClick={() => ui.go('progress')}>
       <span className="c" />
       <span className="grow">
         <span className="label" style={{ display: 'block' }}>

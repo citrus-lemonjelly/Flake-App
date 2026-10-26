@@ -1,4 +1,4 @@
-import type { Cents, ISODate } from '../model/types';
+import type { Cents, Debt, ISODate } from '../model/types';
 import { formatMoney, parseDate } from '../engine';
 
 export const money = (c: Cents, whole = false) => formatMoney(c, { whole });
@@ -38,3 +38,13 @@ export function ordinal(n: number): string {
 }
 
 export const STRATEGY_LABEL = { avalanche: 'highest rate first', snowball: 'smallest balance first', custom: 'your order' } as const;
+
+export const KIND_LABEL: Record<Debt['kind'], string> = {
+  'credit-card': 'Card',
+  auto: 'Car loan',
+  loan: 'Loan',
+  student: 'Student loan',
+  medical: 'Medical',
+  mortgage: 'Mortgage',
+  other: 'Other',
+};

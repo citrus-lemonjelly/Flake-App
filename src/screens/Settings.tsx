@@ -90,7 +90,7 @@ export function Settings() {
               />
             </div>
             <div style={{ marginTop: 10 }}>
-              <Toggle label="Show the debt-free estimate on Home" hint="Turn off to keep Home to cash and bills. Debts still shows it." checked={data.settings.showDebtOnHome} onChange={(showDebtOnHome) => set({ showDebtOnHome })} />
+              <Toggle label="Show the debt-free estimate on Home" hint="Turn off to keep Home to cash and bills. Progress still shows it." checked={data.settings.showDebtOnHome} onChange={(showDebtOnHome) => set({ showDebtOnHome })} />
             </div>
           </div>
 
@@ -225,7 +225,7 @@ export function Settings() {
             rows={live(data.bills)
               .sort((a, b) => a.dueDay - b.dueDay)
               .map((b) => ({ id: b.id, name: b.name, sub: `Due the ${ordinal(b.dueDay)}${b.funding === 'split' ? ' · split' : ''}${b.paidOn === 'due-date' && data.settings.billTiming === 'payday' ? ' · autopay' : b.paidOn === 'payday' && data.settings.billTiming === 'due-date' ? ' · paid on payday' : ''}`, amount: money(b.amount), open: () => ui.open(<BillSheet id={b.id} />) }))}
-            empty="Utilities, phone, insurance… Debt payments live under Debts."
+            empty="Utilities, phone, insurance… Debt payments live under Progress."
           />
           <ListCard
             title="Spending budgets"

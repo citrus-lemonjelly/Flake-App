@@ -1,12 +1,13 @@
-import { addDays, byId, debtHistory, fundHistory, fundPace, outflowsBetween } from '../engine';
+import { useMemo, useState } from 'react';
+import { addDays, amortize, byId, debtHistory, fundHistory, fundPace, outflowsBetween } from '../engine';
 import type { Debt } from '../model/types';
+import { patch } from '../store/actions';
 import type { Derived } from '../state/derive';
-import { useData, useDerived } from '../state/store';
+import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import { AreaChart, type ChartPoint } from '../ui/AreaChart';
 import { Bar, Empty, Pill, Sheet } from '../ui/components';
-import { duration, money, monthOnly, monthYear, monthsBetween, shortDate } from '../ui/format';
-import { KIND_LABEL } from '../screens/Debts';
+import { KIND_LABEL, duration, money, monthOnly, monthYear, monthsBetween, shortDate } from '../ui/format';
 import { DebtSheet, FundSheet, PaymentSheet } from './EditSheets';
 import { AssignSheet } from './AssignSheet';
 
@@ -118,6 +119,8 @@ export function DebtTrackSheet({ id }: { id: string }) {
           <AreaChart ariaLabel={`${debt.name} balance over time`} points={points} height={180} />
         </>
       )}
+
+      {debt.kind === 'mortgage' && !done && <MortgageWhatIf debt={debt} />}
 
       <div className="form-section">Payments</div>
       {history.length ? (
@@ -233,5 +236,65 @@ export function FundTrackSheet({ id }: { id: string }) {
         <Empty>Nothing moved in yet. Money you assign here from the pot shows up once it's marked done.</Empty>
       )}
     </Sheet>
+  );
+}
+
+/** Extra-principal slider: live amortization against the no-extra baseline. */
+function MortgageWhatIf({ debt }: { debt: Debt }) {
+  const x = useDerived();
+  const update = useUpdate();
+  const startDate = x.startMonth;
+  const [extra, setExtra] = useState(debt.extraPrincipal ?? 0);
+  const ready = debt.balance !== null && debt.apr !== null && debt.minPayment?.type === 'fixed';
+  const base = useMemo(
+    () => (ready ? amortize({ balance: debt.balance!, apr: debt.apr!, payment: (debt.minPayment as { amount: number }).amount, extra: 0, startDate }) : null),
+    [ready, debt.balance, debt.apr, debt.minPayment, startDate],
+  );
+  const withExtra = useMemo(
+    () => (ready ? amortize({ balance: debt.balance!, apr: debt.apr!, payment: (debt.minPayment as { amount: number }).amount, extra, startDate }) : null),
+    [ready, debt.balance, debt.apr, debt.minPayment, extra, startDate],
+  );
+  return (
+    <>
+      <div className="form-section">Pay extra principal?</div>
+      {!ready || !base || !withExtra ? (
+        <Empty>Add the balance, rate and principal + interest payment to see payoff what-ifs.</Empty>
+      ) : (
+        <>
+          <div className="row muted" style={{ fontSize: 13 }}>
+            <span>
+              {money(debt.balance!, true)} at {debt.apr}%
+            </span>
+            <span>{money((debt.minPayment as { amount: number }).amount + (debt.escrow ?? 0))}/mo incl. escrow</span>
+          </div>
+          <div className="row" style={{ marginTop: 14 }}>
+            <span className="label">Extra principal each month</span>
+            <span className="num" style={{ fontSize: 20 }}>
+              {money(extra, true)}
+            </span>
+          </div>
+          <input type="range" className="slider" min={0} max={100000} step={2500} value={extra} onChange={(e) => setExtra(Number(e.target.value))} aria-label="Extra principal per month" />
+          <div className="scen">
+            <div>
+              <div className="label">Paid off</div>
+              <div className="v">{withExtra.payoffDate ? monthYear(withExtra.payoffDate) : '—'}</div>
+            </div>
+            <div>
+              <div className="label">Interest saved</div>
+              <div className="v">{money(base.totalInterest - withExtra.totalInterest, true)}</div>
+            </div>
+            <div>
+              <div className="label">Time saved</div>
+              <div className="v">{duration(base.months - withExtra.months)}</div>
+            </div>
+          </div>
+          {extra !== (debt.extraPrincipal ?? 0) && (
+            <button className="btn small block" style={{ marginTop: 12 }} onClick={() => update((d) => patch(d, 'debts', debt.id, { extraPrincipal: extra }))}>
+              Use {money(extra, true)}/mo as my extra principal
+            </button>
+          )}
+        </>
+      )}
+    </>
   );
 }

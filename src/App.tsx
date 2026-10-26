@@ -11,9 +11,7 @@ import { ThemeQuick } from './ui/ThemeQuick';
 import { Home } from './screens/Home';
 import { Plan } from './screens/Plan';
 import { Spending } from './screens/Spending';
-import { Debts } from './screens/Debts';
-import { Goals } from './screens/Goals';
-import { Tracker } from './screens/Tracker';
+import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
 import { LogSheet } from './sheets/LogSheet';
 import { CheckInSheet } from './sheets/CheckInSheet';
@@ -29,9 +27,7 @@ const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
   { route: 'home', label: 'Home', desk: 'Dashboard', icon: 'home' },
   { route: 'plan', label: 'Plan', desk: 'Plan', icon: 'plan' },
   { route: 'spending', label: 'Spending', desk: 'Spending', icon: 'receipt' },
-  { route: 'debts', label: 'Debts', desk: 'Debts & house', icon: 'debts' },
-  { route: 'goals', label: 'Goals', desk: 'Goals & savings', icon: 'goals' },
-  { route: 'tracker', label: 'Tracker', desk: 'Tracker', icon: 'track' },
+  { route: 'progress', label: 'Progress', desk: 'Progress', icon: 'goals' },
   { route: 'settings', label: 'Settings', desk: 'Settings', icon: 'settings' },
 ];
 
@@ -85,7 +81,7 @@ function Shell() {
   const ui = useUI();
   const syncStatus = useSyncStatus();
   usePayoffCelebration();
-  const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, debts: <Debts />, goals: <Goals />, tracker: <Tracker />, settings: <Settings /> }[ui.route];
+  const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, progress: <Progress />, settings: <Settings /> }[ui.route];
   return (
     <div className="shell">
       <aside className="side" aria-label="Main">
