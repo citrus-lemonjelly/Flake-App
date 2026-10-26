@@ -12,7 +12,7 @@ type Kind = 'spending' | 'bonus' | 'hours';
 const MONEY_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫'];
 const HOURS_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 
-/** The "+" button: amount pad first, then a category, in three taps. Hourly households can log hours here too. */
+/** The "+ Log" buttons: amount pad first, then a category, in three taps. Hourly households can log hours here too. */
 export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
   const data = useData();
   const x = useDerived();

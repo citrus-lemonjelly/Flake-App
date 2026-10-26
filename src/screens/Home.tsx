@@ -630,7 +630,7 @@ function Budgets() {
 
 /** The last few things logged, with a way into the full Spending screen. */
 /** The latest logged entries, newest first. Shown inside the budgets card, or on its own. */
-function RecentEntries({ count }: { count: number }) {
+function RecentEntries({ count, log }: { count: number; log?: boolean }) {
   const data = useData();
   const ui = useUI();
   const recent = live(data.spending)
@@ -642,9 +642,16 @@ function RecentEntries({ count }: { count: number }) {
     <div className="recent">
       <div className="row">
         <span className="label">Recent spending</span>
-        <button className="link" onClick={() => ui.go('spending')}>
-          See all spending ›
-        </button>
+        <span style={{ display: 'flex', gap: 14 }}>
+          {log && (
+            <button className="link" onClick={() => ui.open(<LogSheet />)}>
+              + Log
+            </button>
+          )}
+          <button className="link" onClick={() => ui.go('spending')}>
+            See all spending ›
+          </button>
+        </span>
       </div>
       {recent.length ? (
         <ul className="list">
@@ -665,7 +672,7 @@ function RecentEntries({ count }: { count: number }) {
         </ul>
       ) : (
         <div className="explain" style={{ padding: '6px 0' }}>
-          Nothing logged yet. Tap + after a purchase.
+          Nothing logged yet. Tap + Log after a purchase.
         </div>
       )}
     </div>
@@ -676,7 +683,7 @@ function RecentEntries({ count }: { count: number }) {
 function RecentSpending() {
   return (
     <div className="card">
-      <RecentEntries count={3} />
+      <RecentEntries count={3} log />
     </div>
   );
 }

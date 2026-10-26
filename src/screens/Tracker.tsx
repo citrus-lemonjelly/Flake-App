@@ -57,14 +57,6 @@ export function Tracker() {
             {money(owed, true)} owed · {money(saved, true)} saved
           </div>
         </div>
-        <div className="actions">
-          <button className="btn small ghost" onClick={() => ui.open(<DebtSheet />)}>
-            + Debt
-          </button>
-          <button className="btn small" onClick={() => ui.open(<FundSheet />)}>
-            + Goal
-          </button>
-        </div>
       </header>
 
       <ScreenTip id="tracker">
@@ -87,13 +79,23 @@ export function Tracker() {
       <div className={show === 'all' ? 'plan-grid' : 'stack'}>
         {show !== 'goals' && (
           <div className="card">
-            <h3>Debts</h3>
+            <h3>
+              Debts
+              <button className="link" onClick={() => ui.open(<DebtSheet />)}>
+                + Add
+              </button>
+            </h3>
             {debts.length ? <ul className="list track-list">{debts.map(debtRow)}</ul> : <Empty>No debts yet. Add each card and loan to track it on its own.</Empty>}
           </div>
         )}
         {show !== 'debts' && (
           <div className="card">
-            <h3>Savings goals</h3>
+            <h3>
+              Savings goals
+              <button className="link" onClick={() => ui.open(<FundSheet />)}>
+                + Add
+              </button>
+            </h3>
             {funds.length ? <ul className="list track-list">{funds.map(fundRow)}</ul> : <Empty>No goals yet. Add things you're saving for, like a fence, a trip, or an emergency fund.</Empty>}
           </div>
         )}

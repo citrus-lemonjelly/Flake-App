@@ -239,7 +239,7 @@ export function Spending() {
                 </div>
               ))
             ) : (
-              <Empty>{filter === 'all' ? 'Nothing logged in this stretch. Tap + after a purchase.' : 'Nothing here for this filter.'}</Empty>
+              <Empty>{filter === 'all' ? 'Nothing logged in this stretch. Tap + Log after a purchase.' : 'Nothing here for this filter.'}</Empty>
             )}
           </div>
         </div>

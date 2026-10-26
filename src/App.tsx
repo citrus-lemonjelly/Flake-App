@@ -87,6 +87,7 @@ function Shell() {
   usePayoffCelebration();
   const screen = { home: <Home />, plan: <Plan />, spending: <Spending />, debts: <Debts />, goals: <Goals />, tracker: <Tracker />, settings: <Settings /> }[ui.route];
   // The phone tab bar keeps five tabs; Spending opens from Home and Settings from its gear.
+  // Adding things happens from the + in each section, so the bar holds only tabs.
   const tabs = NAV.filter((n) => n.route !== 'settings' && n.route !== 'spending');
   return (
     <div className="shell">
@@ -117,15 +118,7 @@ function Shell() {
       <main className="main">{screen}</main>
       <VersionBadge />
       <nav className="tabbar" aria-label="Main">
-        {tabs.slice(0, 2).map((n) => (
-          <TabButton key={n.route} {...n} />
-        ))}
-        <span className="fab-wrap">
-          <button className="fab" aria-label="Log spending" onClick={() => ui.open(<LogSheet />)}>
-            <Icon name="plus" size={26} stroke={2.4} />
-          </button>
-        </span>
-        {tabs.slice(2).map((n) => (
+        {tabs.map((n) => (
           <TabButton key={n.route} {...n} />
         ))}
       </nav>

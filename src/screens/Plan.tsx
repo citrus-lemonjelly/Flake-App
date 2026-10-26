@@ -9,6 +9,7 @@ import { Bar, Empty, Segmented } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { WEEKDAYS, minus, money, monthOnly, shortDate, weekdayDate } from '../ui/format';
 import { AssignSheet } from '../sheets/AssignSheet';
+import { LogSheet } from '../sheets/LogSheet';
 import { BillSheet, CategorySheet, DebtSheet, FundSheet } from '../sheets/EditSheets';
 import type { PeriodPlan, PlanLine } from '../engine';
 import { PaydayRow } from '../ui/PaydayRow';
@@ -276,7 +277,15 @@ function PaycheckView() {
 
           <div className="card">
             <h3>
-              Logged spending <span className="num">{money(spending.reduce((t, s) => t + s.amount, 0))}</span>
+              Logged spending
+              <span style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <span className="num">{money(spending.reduce((t, s) => t + s.amount, 0))}</span>
+                {isCurrent && (
+                  <button className="link" onClick={() => ui.open(<LogSheet />)}>
+                    + Log
+                  </button>
+                )}
+              </span>
             </h3>
             {spending.length ? (
               <ul className="list">
@@ -296,7 +305,7 @@ function PaycheckView() {
                 ))}
               </ul>
             ) : (
-              <Empty>{isCurrent ? 'Nothing logged yet. Tap + after a purchase.' : 'Nothing logged in this paycheck.'}</Empty>
+              <Empty>{isCurrent ? 'Nothing logged yet. Tap + Log after a purchase.' : 'Nothing logged in this paycheck.'}</Empty>
             )}
           </div>
         </div>
@@ -531,7 +540,15 @@ function RangeView({ kind }: { kind: 'week' | 'month' }) {
 
           <div className="card">
             <h3>
-              Logged spending <span className="num">{money(spending.reduce((t, s) => t + s.amount, 0))}</span>
+              Logged spending
+              <span style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <span className="num">{money(spending.reduce((t, s) => t + s.amount, 0))}</span>
+                {i === 0 && (
+                  <button className="link" onClick={() => ui.open(<LogSheet />)}>
+                    + Log
+                  </button>
+                )}
+              </span>
             </h3>
             {spending.length ? (
               <ul className="list">
