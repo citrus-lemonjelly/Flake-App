@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { emptyData, entity } from '../model/factory';
-import type { AppData, Bill, Category, IncomeSource } from '../model/types';
+import type { AppData, BalanceCheckIn, Bill, Category, IncomeSource, Spending } from '../model/types';
 import { budgetsToWeekly, logSpending, markBillPaid, setAsidePart, updateSettings } from '../store/actions';
+import type { DebtPayment } from '../model/types';
 import { billItems, outflowsBetween, partDates } from './outflows';
 import { billsDue, bucketBalance, savingFor, splitStatus } from './bills';
-import { monthFlow, weekSpending, weeklyAmount } from './flow';
+import { balanceForecast, monthFlow, weekSpending, weeklyAmount } from './flow';
 import { weekRanges } from './budget';
 
 /** Paid on the 15th and the last day; the house is saved for in two halves and paid on the 1st. */
@@ -126,5 +127,51 @@ describe('weekly budgets', () => {
     d = budgetsToWeekly(d);
     expect(d.categories.map((c) => c.cadence)).toEqual(['weekly', 'weekly', 'weekly']);
     expect(d.categories[2]!.amount).toBe(Math.round((52_000 * 12 * 7) / 365.25));
+  });
+});
+
+describe('bank balance', () => {
+  const withBalance = (d: AppData, date: string, balance: number, at: string): AppData => ({
+    ...d,
+    checkIns: [...d.checkIns, entity<BalanceCheckIn>({ date, balance, note: '', createdAt: at })],
+  });
+  const spend = (d: AppData, date: string, amount: number, at: string): AppData => ({
+    ...d,
+    spending: [...d.spending, entity<Spending>({ date, amount, categoryId: d.categories[0]!.id, note: '', createdAt: at })],
+  });
+
+  it('is nothing until a balance is typed in', () => {
+    expect(balanceForecast(household(), '2026-11-10')).toBeNull();
+  });
+
+  it('carries the last balance to today with what was logged since', () => {
+    let d = withBalance(household(), '2026-11-01', 100_000, '2026-11-01T12:00:00Z');
+    d = spend(d, '2026-11-01', 1_000, '2026-11-01T09:00:00Z'); // before the balance: already in it
+    d = spend(d, '2026-11-01', 2_000, '2026-11-01T18:00:00Z'); // after it, same day
+    d = spend(d, '2026-11-07', 6_000, '2026-11-07T12:00:00Z');
+    const f = balanceForecast(d, '2026-11-10', 5)!;
+    expect(f).toMatchObject({ inSince: 0, outSince: 8_000, now: 92_000 });
+  });
+
+  it('takes extra debt payments out too', () => {
+    let d = withBalance(household(), '2026-11-01', 100_000, '2026-11-01T12:00:00Z');
+    d = { ...d, debtPayments: [entity<DebtPayment>({ date: '2026-11-05', debtId: 'x', amount: 25_000, kind: 'extra', note: '' })] };
+    expect(balanceForecast(d, '2026-11-10', 0)!.now).toBe(75_000);
+  });
+
+  it('projects paydays, bills, set-asides and the buckets left to spend', () => {
+    let d = withBalance(household(), '2026-11-01', 100_000, '2026-11-01T12:00:00Z');
+    d = spend(d, '2026-11-07', 6_000, '2026-11-07T12:00:00Z');
+    const f = balanceForecast(d, '2026-11-10', 5)!;
+    // Nov 11–12: the $80 left this week, $40 a day. Nov 13: +$3,000 pay, −$1,100 set aside, −$80 phone, −$20 groceries.
+    expect(f.days.map((x) => [x.date, x.balance])).toEqual([
+      ['2026-11-10', 94_000],
+      ['2026-11-11', 90_000],
+      ['2026-11-12', 86_000],
+      ['2026-11-13', 266_000],
+      ['2026-11-14', 264_000],
+      ['2026-11-15', 262_000],
+    ]);
+    expect(f.low).toEqual({ date: '2026-11-12', balance: 86_000 });
   });
 });
