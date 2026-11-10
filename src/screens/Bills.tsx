@@ -114,8 +114,20 @@ export function Bills() {
                       <BillRow key={`${o.item.itemId}${o.dueDate}`} o={o} today={x.today} />
                     ))}
                   </ul>
+                  {groups.length > 1 && (
+                    <div className="bill-subtotal">
+                      <span>
+                        {g.items.length} bill{g.items.length === 1 ? '' : 's'}
+                      </span>
+                      <span>{money(g.items.reduce((s, o) => s + o.amount, 0))}</span>
+                    </div>
+                  )}
                 </div>
               ))}
+              <div className="bill-subtotal total">
+                <span>Still to pay</span>
+                <span>{money(total - paidTotal)}</span>
+              </div>
             </div>
           )}
           {paid.length > 0 && (

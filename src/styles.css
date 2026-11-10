@@ -496,6 +496,10 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .month-nav .icon-btn { width: 44px; height: 44px; background: none; color: var(--accent); }
 .bill-group + .bill-group { margin-top: 12px; }
 .bill-group > .label { margin: 4px 0 2px; }
+.bill-subtotal { display: flex; justify-content: space-between; gap: 12px; padding: 8px 44px 2px 56px; border-top: 1px dashed var(--line); font-size: 12.5px; color: var(--ink3); }
+.bill-subtotal span:last-child { font-family: var(--font-display); font-weight: 600; color: var(--ink2); }
+.bill-subtotal.total { margin-top: 12px; padding: 12px 44px 0 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink2); }
+.bill-subtotal.total span:last-child { font-weight: 700; color: var(--ink); font-size: 15px; }
 .date-tile { width: 44px; height: 48px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; font-family: var(--font-display); font-weight: 700; font-size: 17px; line-height: 1.1; }
 .date-tile small { font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.04em; }
 .date-tile.soon { background: var(--warn-soft); color: var(--warn); }
