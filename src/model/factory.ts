@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: Settings = {
   strategy: 'avalanche',
   customOrder: [],
   monthlyExtraForDebt: 0,
-  cashBuffer: 10000,
+  cashBuffer: 0,
   assumedApr: {},
   theme: 'system',
   palette: 'ocean',

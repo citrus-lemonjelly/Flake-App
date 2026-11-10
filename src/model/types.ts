@@ -323,8 +323,10 @@ export interface Settings {
   customOrder: Id[];
   /** Extra money per month aimed at debt on top of minimums. */
   monthlyExtraForDebt: Cents;
-  /** Money always kept in the bank (a floor); never counted as safe to spend. */
+  /** Money always kept in checking (a floor); the balance projection warns before going under it. */
   cashBuffer: Cents;
+  /** The household chose its floor (including choosing none). Until then there's no floor and Home asks. */
+  floorSet?: boolean;
   /** Rates assumed for debts whose APR has not been entered yet. */
   assumedApr: Partial<Record<DebtKind, number>>;
   theme: 'system' | 'light' | 'dark';

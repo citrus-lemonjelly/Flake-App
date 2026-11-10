@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { balanceForecast, extraPaymentImpact, floorCheck, live, monthFlows } from '../engine';
+import { balanceForecast, checkingFloor, extraPaymentImpact, floorCheck, live, monthFlows } from '../engine';
 import type { Cents } from '../model/types';
 import { logDebtPayment } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
@@ -27,7 +27,7 @@ export function SendToDebtSheet() {
   const upNext = order.find((id) => debts.some((d) => d.id === id)) ?? debts[0]?.id;
   const [debtId, setDebtId] = useState(upNext ?? '');
   // What can go out without taking checking under the floor (Keep in checking), over the next 30 days.
-  const floor = data.settings.cashBuffer;
+  const floor = checkingFloor(data.settings).amount;
   const forecast = useMemo(() => balanceForecast(data, x.today, 30), [data, x.today]);
   const spare = forecast ? floorCheck(forecast, floor).spare : null;
   // Start at what's left over, but never more than what's spare or what the debt owes (rounded down to $50).

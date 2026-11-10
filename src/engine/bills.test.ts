@@ -5,7 +5,7 @@ import { autoTickBills, budgetsToWeekly, logSpending, markBillPaid, setAsidePart
 import type { DebtPayment } from '../model/types';
 import { billItems, dueDatesIn, outflowsBetween, partDates } from './outflows';
 import { autoTickDue, billsDue, bucketBalance, savingFor, splitStatus } from './bills';
-import { balanceForecast, carriedIn, floorCheck, monthFlow, recentPurchases, weekSpending, weeklyAmount } from './flow';
+import { balanceForecast, carriedIn, checkingFloor, floorCheck, monthFlow, recentPurchases, weekSpending, weeklyAmount } from './flow';
 import { weekRanges } from './budget';
 
 /** Paid on the 15th and the last day; the house is saved for in two halves and paid on the 1st. */
@@ -283,5 +283,21 @@ describe('recent purchases', () => {
       { note: 'shell', amount: 4_500 }, // one Shell chip, with its latest amount
       { note: 'Costco', amount: 6_000 },
     ]);
+  });
+});
+
+describe('the floor kept in checking', () => {
+  const settings = (fields: Partial<AppData['settings']>) => ({ ...emptyData().settings, ...fields });
+
+  it('starts with no floor until the household picks one', () => {
+    expect(checkingFloor(settings({}))).toEqual({ amount: 0, chosen: false });
+    expect(checkingFloor(settings({ cashBuffer: 200_000, floorSet: true }))).toEqual({ amount: 200_000, chosen: true });
+    expect(checkingFloor(settings({ cashBuffer: 0, floorSet: true }))).toEqual({ amount: 0, chosen: true }); // chose none
+  });
+
+  it("ignores the old app's untouched $100, but keeps a floor someone set before", () => {
+    expect(checkingFloor(settings({ cashBuffer: 10_000 }))).toEqual({ amount: 0, chosen: false });
+    expect(checkingFloor(settings({ cashBuffer: 10_000, guide: { confirmed: ['keep'] } }))).toEqual({ amount: 10_000, chosen: true });
+    expect(checkingFloor(settings({ cashBuffer: 50_000 }))).toEqual({ amount: 50_000, chosen: true });
   });
 });

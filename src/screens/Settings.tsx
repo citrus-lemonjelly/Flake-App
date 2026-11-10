@@ -7,6 +7,7 @@ import { eraseAll, replaceEverything, updateHousehold, updateSettings } from '..
 import { useData, useStore, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import { MoneyField, NumberField, SelectField, Segmented, TextField } from '../ui/components';
+import { checkingFloor } from '../engine';
 import { WEEKDAYS, money, ordinal } from '../ui/format';
 import { PALETTES } from '../theme/palettes';
 import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
@@ -108,7 +109,14 @@ export function Settings() {
             </div>
             <div className="form-grid">
               <SelectField label="Weekly budgets reset on" value={String(data.household.weekStartsOn)} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} onChange={(v) => setHousehold({ weekStartsOn: Number(v) })} />
-              <MoneyField label="Keep in checking" hint="Your floor. Flake warns when checking is headed under it, and Send to a debt stays above it." value={data.settings.cashBuffer} onChange={(c) => set({ cashBuffer: c ?? 0 })} />
+              <MoneyField
+                label="Keep in checking"
+                hint="Your floor. Flake warns when checking is headed under it, and Send to a debt stays above it. Leave empty for no floor."
+                value={checkingFloor(data.settings).amount || null}
+                allowEmpty
+                placeholder="No floor"
+                onChange={(c) => set({ cashBuffer: c ?? 0, floorSet: true })}
+              />
               <NumberField label="Assumed card rate" hint="Used until a card's real rate is entered." value={data.settings.assumedApr['credit-card'] ?? 24} suffix="%" min={0} max={100} onChange={(v) => set({ assumedApr: { ...data.settings.assumedApr, 'credit-card': v ?? 24 } })} />
             </div>
           </div>

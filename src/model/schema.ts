@@ -50,6 +50,7 @@ export const appDataSchema = z.object({
     customOrder: z.array(z.string()),
     monthlyExtraForDebt: cents,
     cashBuffer: cents,
+    floorSet: z.boolean().optional(),
     assumedApr: z.partialRecord(debtKind, z.number()),
     theme: z.enum(['system', 'light', 'dark']),
     // Added after v1 shipped; older backups get the defaults.
