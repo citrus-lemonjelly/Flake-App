@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
-export type Route = 'home' | 'money' | 'progress' | 'settings';
+export type Route = 'home' | 'bills' | 'spending' | 'debt' | 'settings';
 
-/** Optional state handed to a screen when navigating, e.g. a budget to filter Money's purchases by. */
+/** Optional state handed to a screen when navigating, e.g. a budget to show on Spending. */
 export interface RouteParams {
   categoryId?: string;
 }
@@ -31,12 +31,12 @@ export function useUI(): UI {
   return ui;
 }
 
-/** Plan and Spending became Money, and Debts, Goals and Tracker became Progress; old links still land on the right page. */
-const OLD_ROUTES: Record<string, Route> = { plan: 'money', spending: 'money', debts: 'progress', goals: 'progress', tracker: 'progress' };
+/** Pages that were renamed or folded together; old links still land on the right page. */
+const OLD_ROUTES: Record<string, Route> = { plan: 'home', money: 'home', progress: 'debt', debts: 'debt', goals: 'debt', tracker: 'debt' };
 
 function initialRoute(): Route {
   const h = location.hash.slice(1);
-  return (['home', 'money', 'progress', 'settings'] as const).find((r) => r === h) ?? OLD_ROUTES[h] ?? 'home';
+  return (['home', 'bills', 'spending', 'debt', 'settings'] as const).find((r) => r === h) ?? OLD_ROUTES[h] ?? 'home';
 }
 
 export function UIProvider({ children }: { children: ReactNode }) {

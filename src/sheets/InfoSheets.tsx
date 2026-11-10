@@ -1,13 +1,10 @@
-import { useState } from 'react';
 import { byId } from '../engine';
-import { updateSettings } from '../store/actions';
-import { useData, useDerived, useUpdate } from '../state/store';
+import { useData, useDerived } from '../state/store';
 import { useUI } from '../state/ui';
-import { MoneyField, Sheet } from '../ui/components';
+import { Sheet } from '../ui/components';
 import { STRATEGY_LABEL, minus, money, monthYear, shortDate } from '../ui/format';
 import { DebtSheet } from './EditSheets';
 import { PayoffSheet } from './PayoffSheet';
-import { confirmStep } from '../guide';
 
 /** Definitions for the two numbers people act on: Safe to spend and the pot. */
 export function MeaningSheet() {
@@ -152,35 +149,6 @@ export function AssumptionsSheet() {
       ) : (
         <div className="reassure">Every balance, rate and minimum is filled in, so this is as informed as the estimate gets.</div>
       )}
-    </Sheet>
-  );
-}
-
-export function CushionSheet() {
-  const data = useData();
-  const update = useUpdate();
-  const ui = useUI();
-  const [v, setV] = useState<number | null>(data.settings.cashBuffer);
-  return (
-    <Sheet
-      title="Keep in the bank"
-      onClose={ui.close}
-      footer={
-        <button
-          className="btn primary"
-          onClick={() => {
-            update((d) => confirmStep(updateSettings(d, { cashBuffer: v ?? 0 }), 'keep'));
-            ui.close();
-          }}
-        >
-          Save
-        </button>
-      }
-    >
-      <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
-        The amount that always stays in checking. Flake never counts it as safe to spend.
-      </p>
-      <MoneyField label="Always keep" value={v} onChange={setV} />
     </Sheet>
   );
 }

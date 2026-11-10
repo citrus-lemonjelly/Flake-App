@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { addDays, allPaydays, hourlyTakeHome, live } from '../engine';
+import { addDays, allPaydays, hourlyTakeHome, live, weekRanges, weekSpending } from '../engine';
 import { logBonus, logSpending, recordPaycheck } from '../store/actions';
-import { useData, useDerived, useStore, useUpdate } from '../state/store';
-import { derive } from '../state/derive';
+import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import { DateField, SelectField, Segmented, Sheet } from '../ui/components';
 import { money, weekdayDate } from '../ui/format';
@@ -17,7 +16,6 @@ export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
   const data = useData();
   const x = useDerived();
   const update = useUpdate();
-  const store = useStore();
   const ui = useUI();
   const hourly = live(data.incomes).filter((s) => s.hourly);
   const [kind, setKind] = useState<Kind>(initial === 'hours' && !hourly.length ? 'spending' : initial);
@@ -29,10 +27,9 @@ export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
   const cents = parseInt(digits || '0', 10);
   const hours = Number(digits || '0');
 
-  const budgets = live(data.categories).map((c) => {
-    const budget = x.current?.lines.find((l) => l.kind === 'category' && l.refId === c.id)?.amount ?? 0;
-    return { c, left: budget - (x.spentThisPeriod.get(c.id) ?? 0) };
-  });
+  // What's left in each weekly budget for the week of the purchase.
+  const [week] = weekRanges(data, date, 1);
+  const budgets = weekSpending(data, week!).byCategory.map(({ category: c, budget, spent }) => ({ c, left: budget - spent }));
 
   // Hours go to the next paycheck from that source (it pays for the week just ended).
   const source = hourly.find((s) => s.id === sourceId);
@@ -58,22 +55,17 @@ export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
     if (!ready) return;
     if (kind === 'spending') {
       update((d) => logSpending(d, { date, amount: cents, categoryId: cat, note }));
-      // Say where it landed: budget money doesn't change Safe to spend (it was set aside); anything else does.
-      const after = derive(store.get());
+      // Say where it landed.
       const budget = budgets.find((b) => b.c.id === cat);
       if (budget) {
         const left = budget.left - cents;
-        ui.toast(
-          left >= 0
-            ? `Logged ${money(cents)} · ${money(left)} left in ${budget.c.name} this paycheck`
-            : `Logged ${money(cents)} · ${budget.c.name} is ${money(-left)} over · Safe to spend now ${after.safe ? money(after.safe.safe) : '—'}`,
-        );
+        ui.toast(left >= 0 ? `Logged ${money(cents)} · ${money(left)} left in ${budget.c.name} this week` : `Logged ${money(cents)} · ${budget.c.name} is ${money(-left)} over this week`);
       } else {
-        ui.toast(`Logged ${money(cents)} (not from a budget) · Safe to spend now ${after.safe ? money(after.safe.safe) : '—'}`);
+        ui.toast(`Logged ${money(cents)} (not from a budget)`);
       }
     } else if (kind === 'bonus') {
       update((d) => logBonus(d, { date, amount: cents, note: note || 'Bonus' }));
-      ui.toast(`Added ${money(cents)} to the pot`);
+      ui.toast(`Added ${money(cents)} to money in`);
     } else if (source?.hourly && nextPay) {
       update((d) => recordPaycheck(d, { sourceId: source.id, payday: nextPay.payday, hours }));
       ui.toast(`${hours} hours logged · ≈ ${money(hourlyTakeHome(source.hourly, hours))} on ${weekdayDate(nextPay.payday)}`);

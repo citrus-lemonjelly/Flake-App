@@ -1,4 +1,3 @@
-import { DEFAULT_SETTINGS } from './model/factory';
 import type { AppData } from './model/types';
 import { live } from './engine';
 import { updateSettings } from './store/actions';
@@ -8,7 +7,7 @@ import { updateSettings } from './store/actions';
  * something, in the order it's easiest to do. Each step ticks itself off from
  * the data; the few that can't be detected are confirmed by hand.
  */
-export type GuideStepId = 'names' | 'paychecks' | 'timing' | 'bills' | 'budgets' | 'debts' | 'keep' | 'checkin' | 'sync';
+export type GuideStepId = 'names' | 'paychecks' | 'timing' | 'bills' | 'budgets' | 'debts' | 'sync';
 
 export interface GuideStep {
   id: GuideStepId;
@@ -34,7 +33,7 @@ export function guideSteps(data: AppData, signedIn: boolean): GuideStep[] {
       done: confirmed.has('timing') || data.settings.billTiming === 'payday',
     },
     { id: 'bills', title: 'Add your bills', why: 'Power, phone, insurance… with due days. Mark any on autopay.', action: 'Add a bill', done: live(data.bills).length > 0 },
-    { id: 'budgets', title: 'Set spending budgets', why: 'Groceries, gas, fun money. What you plan to spend each week or paycheck.', action: 'Add a budget', done: live(data.categories).length > 0 },
+    { id: 'budgets', title: 'Set spending budgets', why: 'Groceries, gas, fun money. What you plan to spend each week.', action: 'Add a budget', done: live(data.categories).length > 0 },
     {
       id: 'debts',
       title: 'Add your debts',
@@ -42,14 +41,6 @@ export function guideSteps(data: AppData, signedIn: boolean): GuideStep[] {
       action: 'Add a debt',
       done: live(data.debts).length > 0 || confirmed.has('debts'),
     },
-    {
-      id: 'keep',
-      title: 'How much to always keep in the bank',
-      why: 'A floor that’s never counted as safe to spend.',
-      action: 'Set it',
-      done: confirmed.has('keep') || data.settings.cashBuffer !== DEFAULT_SETTINGS.cashBuffer,
-    },
-    { id: 'checkin', title: 'Do your first check-in', why: 'Type your checking balance. From then on it’s the only thing you need to enter.', action: 'Check in', done: live(data.checkIns).length > 0 },
     { id: 'sync', title: 'Sync your phone and computer', why: 'Optional: sign in on both to keep them in step.', action: 'Set up', done: signedIn || confirmed.has('sync'), optional: true },
   ];
 }

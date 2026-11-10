@@ -107,6 +107,15 @@ export type Funding = 'due-date' | 'split';
  */
 export type PaidOn = 'payday' | 'due-date';
 
+/**
+ * One part of a bill saved for in pieces: set aside from the paycheck that
+ * covers `day` (day of the month), in the month before the bill is due.
+ */
+export interface SavePart {
+  day: number; // 1–31, clamps to month end
+  amount: Cents;
+}
+
 export interface Bill extends Entity {
   name: string;
   amount: Cents; // per month
@@ -116,6 +125,11 @@ export interface Bill extends Entity {
   autopay: boolean;
   /** Overrides the household's bill timing for this bill. */
   paidOn?: PaidOn;
+  /**
+   * Saved for in parts: each part comes out of a paycheck into a bucket, and
+   * the whole payment leaves the bucket on the due date. Parts add up to the amount.
+   */
+  parts?: SavePart[];
 }
 
 export type CategoryCadence = 'weekly' | 'per-period' | 'monthly';
@@ -173,6 +187,8 @@ export interface Debt extends Entity {
   originalBalance?: Cents;
   /** Overrides the household's bill timing for this payment. */
   paidOn?: PaidOn;
+  /** Saved for in parts from paychecks, then paid in one go (see Bill.parts). */
+  parts?: SavePart[];
 }
 
 /**
@@ -185,6 +201,18 @@ export interface BillPayment extends Entity {
   dueDate: ISODate; // which month's occurrence
   paidOn: ISODate; // when it actually left (or is expected to)
   amount: Cents | null; // when different from usual
+  /** Marked paid for that month on the Bills page. */
+  paid?: boolean;
+}
+
+/** One part of a bill saved for in parts, marked as set aside into its bucket. */
+export interface SetAside extends Entity {
+  itemKind: 'bill' | 'debt';
+  itemId: Id;
+  dueDate: ISODate; // the payment it's saving for
+  part: number; // index into the item's parts
+  date: ISODate; // when it was set aside
+  amount: Cents;
 }
 
 export interface DebtPayment extends Entity {
@@ -310,6 +338,7 @@ export interface AppData {
   incomeReceived: IncomeReceived[];
   paychecks: PaycheckRecord[];
   billPayments: BillPayment[];
+  setAsides: SetAside[];
   bills: Bill[];
   categories: Category[];
   spending: Spending[];

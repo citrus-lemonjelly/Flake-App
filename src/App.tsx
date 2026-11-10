@@ -9,11 +9,11 @@ import { UIProvider, useUI, type Route } from './state/ui';
 import { Icon, type IconName } from './ui/icons';
 import { ThemeQuick } from './ui/ThemeQuick';
 import { Home } from './screens/Home';
-import { Money } from './screens/Money';
+import { Bills } from './screens/Bills';
+import { Spending } from './screens/Spending';
 import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
 import { LogSheet } from './sheets/LogSheet';
-import { CheckInSheet } from './sheets/CheckInSheet';
 import { CelebrateSheet } from './sheets/InfoSheets';
 import { SyncSheet } from './sheets/SyncSheet';
 import { ProfileSheet } from './sheets/ProfileSheet';
@@ -24,8 +24,9 @@ import { syncLabel, useSyncStatus } from './state/sync';
 
 const NAV: { route: Route; label: string; desk: string; icon: IconName }[] = [
   { route: 'home', label: 'Home', desk: 'Home', icon: 'home' },
-  { route: 'money', label: 'Money', desk: 'Money', icon: 'money' },
-  { route: 'progress', label: 'Progress', desk: 'Progress', icon: 'goals' },
+  { route: 'bills', label: 'Bills', desk: 'Bills', icon: 'receipt' },
+  { route: 'spending', label: 'Spending', desk: 'Spending', icon: 'money' },
+  { route: 'debt', label: 'Debt', desk: 'Debt & goals', icon: 'debts' },
   { route: 'settings', label: 'Settings', desk: 'Settings', icon: 'settings' },
 ];
 
@@ -79,7 +80,7 @@ function Shell() {
   const ui = useUI();
   const syncStatus = useSyncStatus();
   usePayoffCelebration();
-  const screen = { home: <Home />, money: <Money />, progress: <Progress />, settings: <Settings /> }[ui.route];
+  const screen = { home: <Home />, bills: <Bills />, spending: <Spending />, debt: <Progress />, settings: <Settings /> }[ui.route];
   return (
     <div className="shell">
       <aside className="side" aria-label="Main">
@@ -96,9 +97,6 @@ function Shell() {
         <button className="btn cta" onClick={() => ui.open(<LogSheet />)}>
           <Icon name="plus" size={18} stroke={2.4} /> Log spending
         </button>
-        <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => ui.open(<CheckInSheet />)}>
-          <Icon name="bank" size={18} /> Check in
-        </button>
         <div className="side-bottom">
           <ThemeQuick />
           <button className="foot link" style={{ textAlign: 'left', color: 'var(--ink3)', fontWeight: 500 }} onClick={() => ui.open(<SyncSheet />)}>
@@ -113,7 +111,7 @@ function Shell() {
   );
 }
 
-/** The phone's bottom bar: the three pages, then Profile (which holds Settings). */
+/** The phone's bottom bar: the four pages, then Profile (which holds Settings). */
 function PhoneBar() {
   const ui = useUI();
   return (

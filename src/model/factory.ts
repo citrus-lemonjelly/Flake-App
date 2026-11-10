@@ -35,6 +35,7 @@ export function emptyData(): AppData {
     incomeReceived: [],
     paychecks: [],
     billPayments: [],
+    setAsides: [],
     bills: [],
     categories: [],
     spending: [],
