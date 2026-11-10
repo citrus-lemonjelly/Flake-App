@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { addDays, balanceForecast, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
+import { addDays, balanceForecast, floorCheck, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import type { Derived } from '../state/derive';
@@ -17,6 +17,7 @@ import { Icon } from '../ui/icons';
 import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
 import { BalanceSheet } from '../sheets/BalanceSheet';
 import { SendToDebtSheet } from '../sheets/SendToDebtSheet';
+import { FloorSheet } from '../sheets/FloorSheet';
 import { Tick, useBillActions } from '../ui/billActions';
 import { SwipeRow } from '../ui/Swipe';
 import { useCountUp } from '../ui/motion';
@@ -267,6 +268,7 @@ function BalanceCard() {
   const [day, setDay] = useState<number | null>(null);
   const f = useMemo(() => balanceForecast(data, x.today, 30), [data, x.today]);
   const now = useCountUp(f?.now ?? 0);
+  const floor = data.settings.cashBuffer;
 
   if (!f)
     return (
@@ -282,6 +284,7 @@ function BalanceCard() {
     );
 
   const lowIndex = f.days.findIndex((d) => d.date === f.low.date);
+  const fc = floorCheck(f, floor);
   const monthEnd = f.days.find((d, i) => i < f.days.length - 1 && d.date.slice(0, 7) !== f.days[i + 1]!.date.slice(0, 7));
   const payday = x.nextPaydays[0] && f.days.find((d) => d.date === x.nextPaydays[0]!.payday);
   const sel = day === null ? null : f.days[day]!;
@@ -291,9 +294,14 @@ function BalanceCard() {
     <div className="card balance">
       <h3>
         Bank balance
-        <button className="link" onClick={() => ui.open(<BalanceSheet />)}>
-          Update
-        </button>
+        <span style={{ display: 'flex', gap: 14 }}>
+          <button className="link" style={{ color: 'var(--ink2)' }} onClick={() => ui.open(<FloorSheet />)}>
+            {floor ? `Keep ${money(floor, true)}` : 'Set a floor'}
+          </button>
+          <button className="link" onClick={() => ui.open(<BalanceSheet />)}>
+            Update
+          </button>
+        </span>
       </h3>
       <div className="row" style={{ alignItems: 'baseline', marginTop: -6 }}>
         <span className={`num big-num ${f.now < 0 ? 'over' : ''}`}>{now < 0 ? '−' : ''}{money(Math.abs(now))}</span>
@@ -336,13 +344,20 @@ function BalanceCard() {
           </>
         )}
       </div>
-      <BalanceLine days={f.days} lowIndex={lowIndex} day={day} onDay={setDay} />
+      <BalanceLine days={f.days} lowIndex={lowIndex} day={day} onDay={setDay} floor={floor} />
       <div className="bal-tiles">
-        <div className={f.low.balance < 0 ? 'bad' : ''}>
+        <div className={f.low.balance < 0 ? 'bad' : f.low.balance < floor ? 'warn' : ''}>
           <span>Lowest</span>
           <b>{money(f.low.balance, true)}</b>
           <small>{f.low.date === x.today ? 'today' : weekdayDate(f.low.date)}</small>
         </div>
+        {floor > 0 && (
+          <div className={fc.spare > 0 ? 'good' : 'warn'}>
+            <span>Spare above {money(floor, true)}</span>
+            <b>{money(fc.spare, true)}</b>
+            <small>{fc.spare > 0 ? 'free to spend or send' : 'nothing spare'}</small>
+          </div>
+        )}
         {payday && (
           <div>
             <span>After next payday</span>
@@ -358,11 +373,14 @@ function BalanceCard() {
           </div>
         )}
       </div>
-      {f.low.balance < 0 && (
+      {fc.under ? (
         <div className="notice" style={{ marginTop: 12 }}>
-          Checking is on track to dip below $0 on {weekdayDate(f.low.date)}. Moving a bill, a set-aside or some spending past the next payday would cover it.
+          {floor > 0
+            ? `Checking is headed under your ${money(floor, true)} floor on ${weekdayDate(fc.under.date)}, as low as ${money(fc.under.low, true)}.`
+            : `Checking is on track to dip below $0 on ${weekdayDate(fc.under.date)}.`}{' '}
+          Moving a bill, a set-aside or some spending past the next payday would {floor > 0 ? 'keep you above it' : 'cover it'}.
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

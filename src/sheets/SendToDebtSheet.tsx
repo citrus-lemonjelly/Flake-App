@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { balanceForecast, extraPaymentImpact, live, monthFlows } from '../engine';
+import { balanceForecast, extraPaymentImpact, floorCheck, live, monthFlows } from '../engine';
 import type { Cents } from '../model/types';
 import { logDebtPayment } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
@@ -26,17 +26,22 @@ export function SendToDebtSheet() {
     .sort((a, b) => Number(a.kind === 'mortgage') - Number(b.kind === 'mortgage') || (order.indexOf(a.id) + 1 || 99) - (order.indexOf(b.id) + 1 || 99));
   const upNext = order.find((id) => debts.some((d) => d.id === id)) ?? debts[0]?.id;
   const [debtId, setDebtId] = useState(upNext ?? '');
-  // Start at what's left over (rounded down to $50), but never more than the debt owes.
+  // What can go out without taking checking under the floor (Keep in checking), over the next 30 days.
+  const floor = data.settings.cashBuffer;
+  const forecast = useMemo(() => balanceForecast(data, x.today, 30), [data, x.today]);
+  const spare = forecast ? floorCheck(forecast, floor).spare : null;
+  // Start at what's left over, but never more than what's spare or what the debt owes (rounded down to $50).
   const firstBalance = debts.find((d) => d.id === upNext)?.balance ?? 0;
   const [amount, setAmount] = useState<Cents | null>(() => {
-    const start = left >= 5000 ? Math.floor(left / 5000) * 5000 : left;
+    const cap = Math.min(left, spare ?? left);
+    const start = cap >= 5000 ? Math.floor(cap / 5000) * 5000 : cap;
     return Math.min(start, firstBalance) || null;
   });
   const debt = debts.find((d) => d.id === debtId);
   const impact = useMemo(() => (debt && amount ? extraPaymentImpact(data, debt.id, Math.min(amount, debt.balance!), x.today) : null), [data, debt, amount, x.today]);
-  const forecast = useMemo(() => balanceForecast(data, x.today, 30), [data, x.today]);
-  const lowAfter = forecast && amount ? forecast.low.balance - amount : null;
   const pay = debt && amount ? Math.min(amount, debt.balance!) : 0;
+  // Judged on what will actually be sent (never more than the debt owes).
+  const lowAfter = forecast && pay ? forecast.low.balance - pay : null;
 
   if (!debts.length)
     return (
@@ -71,17 +76,29 @@ export function SendToDebtSheet() {
       <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
         {left > 0 ? `${money(left, true)} is left over in ${new Date(`${flow!.start}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' })} after everything else.` : 'Nothing is left over this month yet, but you can still send money you have.'}
       </p>
-      <MoneyField label="How much" value={amount} allowEmpty onChange={setAmount} />
+      <MoneyField
+        label="How much"
+        value={amount}
+        allowEmpty
+        onChange={setAmount}
+        hint={spare !== null && floor > 0 ? `Up to ${money(spare, true)} keeps ${money(floor, true)} in checking.` : undefined}
+      />
       {left > 0 && (
         <div className="chips" style={{ justifyContent: 'flex-start', marginTop: -6 }}>
-          {[10000, 25000, 50000].filter((v) => v < left).map((v) => (
+          {[10000, 25000, 50000].filter((v) => v < left && (spare === null || v <= spare)).map((v) => (
             <button key={v} className="chip" aria-pressed={amount === v} onClick={() => setAmount(v)}>
               {money(v, true)}
             </button>
           ))}
-          <button className="chip" aria-pressed={amount === left} onClick={() => setAmount(left)}>
-            All of it · {money(left, true)}
-          </button>
+          {spare !== null && floor > 0 && spare < left ? (
+            <button className="chip" aria-pressed={amount === spare} onClick={() => setAmount(spare)}>
+              All that's spare · {money(spare, true)}
+            </button>
+          ) : (
+            <button className="chip" aria-pressed={amount === left} onClick={() => setAmount(left)}>
+              All of it · {money(left, true)}
+            </button>
+          )}
         </div>
       )}
 
@@ -126,9 +143,12 @@ export function SendToDebtSheet() {
           )}
         </div>
       )}
-      {lowAfter !== null && lowAfter < 0 && (
+      {lowAfter !== null && lowAfter < floor && (
         <div className="notice" style={{ marginTop: 12 }}>
-          Checking would dip to −{money(-lowAfter, true)} around {weekdayDate(forecast!.low.date)}. Try a smaller amount, or wait until after payday.
+          {floor > 0
+            ? `This would take checking under your ${money(floor, true)} floor, down to ${money(lowAfter, true)} around ${weekdayDate(forecast!.low.date)}.`
+            : `Checking would dip to −${money(-lowAfter, true)} around ${weekdayDate(forecast!.low.date)}.`}{' '}
+          {spare ? `Up to ${money(spare, true)} stays above it.` : 'Try a smaller amount, or wait until after payday.'}
         </div>
       )}
       {amount !== null && debt && amount > debt.balance! && (

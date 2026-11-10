@@ -145,7 +145,7 @@ export function totalsTo(flow: MonthFlow, i: number): { in: number; out: number 
  * The checking balance from today forward, a day at a time. The lowest point is
  * marked; below $0 gets a warning line. Point at a day to read it.
  */
-export function BalanceLine({ days, lowIndex, day, onDay }: { days: { date: string; balance: number }[]; lowIndex: number; day: number | null; onDay: (i: number | null) => void }) {
+export function BalanceLine({ days, lowIndex, day, onDay, floor = 0 }: { days: { date: string; balance: number }[]; lowIndex: number; day: number | null; onDay: (i: number | null) => void; floor?: number }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(320);
   useLayoutEffect(() => {
@@ -158,7 +158,7 @@ export function BalanceLine({ days, lowIndex, day, onDay }: { days: { date: stri
   const n = days.length;
   const W = width, H = 150, padL = 4, padR = 52, padT = 12, padB = 22;
   const vals = days.map((d) => d.balance);
-  const hi = niceMax(Math.max(1, ...vals));
+  const hi = niceMax(Math.max(1, floor * 1.2, ...vals));
   const lo = Math.min(0, ...vals);
   const bottom = lo < 0 ? -niceMax(-lo) : 0;
   const x = (i: number) => padL + (i / Math.max(1, n - 1)) * (W - padL - padR);
@@ -191,10 +191,18 @@ export function BalanceLine({ days, lowIndex, day, onDay }: { days: { date: stri
             </text>
           </g>
         ))}
+        {floor > 0 && (
+          <g>
+            <line x1={padL} x2={W - padR} y1={y(floor)} y2={y(floor)} stroke="var(--warn)" strokeWidth={1.5} strokeDasharray="5 4" />
+            <text x={W - padR + 6} y={y(floor) + 4} fontSize="11" fontWeight="600" fill="var(--warn)">
+              Keep
+            </text>
+          </g>
+        )}
         <path className="fade-late" d={area} fill="var(--accent)" opacity={0.1} />
         <path className="draw" pathLength={1} d={line} fill="none" stroke="var(--accent)" strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={x(lowIndex)} cy={y(low.balance)} r={4.5} fill={low.balance < 0 ? 'var(--bad)' : 'var(--surface)'} stroke={low.balance < 0 ? 'var(--surface)' : 'var(--accent)'} strokeWidth={2} />
-        <text x={x(lowIndex) + (lowRight ? -6 : 6)} y={y(low.balance) + (y(low.balance) > H - padB - 14 ? -8 : 16)} fontSize="11" fontWeight="600" fill={low.balance < 0 ? 'var(--bad)' : 'var(--ink2)'} textAnchor={lowRight ? 'end' : 'start'}>
+        <circle cx={x(lowIndex)} cy={y(low.balance)} r={4.5} fill={low.balance < floor ? 'var(--warn)' : 'var(--surface)'} stroke={low.balance < floor ? 'var(--surface)' : 'var(--accent)'} strokeWidth={2} />
+        <text x={x(lowIndex) + (lowRight ? -6 : 6)} y={y(low.balance) + (y(low.balance) > H - padB - 14 ? -8 : 16)} fontSize="11" fontWeight="600" fill={low.balance < 0 ? 'var(--bad)' : low.balance < floor ? 'var(--warn)' : 'var(--ink2)'} textAnchor={lowRight ? 'end' : 'start'}>
           Low {money(low.balance, true)}
         </text>
         <circle cx={x(0)} cy={y(vals[0]!)} r={4.5} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />

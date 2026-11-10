@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.20.0',
+    date: '2026-11-10',
+    title: 'Keep a floor in checking',
+    items: [
+      'Set how much you always want in checking (Bank balance → Keep, or Settings → Keep in checking).',
+      'The balance chart draws that floor, shows what’s spare above it, and warns with a date if checking is headed under it.',
+      'Send left over to a debt suggests no more than what’s spare above your floor, and warns if an amount would dip under it.',
+    ],
+  },
+  {
     version: '0.19.0',
     date: '2026-11-10',
     title: 'Send left over to a debt',
