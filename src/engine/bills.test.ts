@@ -5,7 +5,7 @@ import { autoTickBills, budgetsToWeekly, logSpending, markBillPaid, setAsidePart
 import type { DebtPayment } from '../model/types';
 import { billItems, dueDatesIn, outflowsBetween, partDates } from './outflows';
 import { autoTickDue, billsDue, bucketBalance, savingFor, splitStatus } from './bills';
-import { balanceForecast, carriedIn, monthFlow, recentPurchases, weekSpending, weeklyAmount } from './flow';
+import { balanceForecast, carriedIn, floorCheck, monthFlow, recentPurchases, weekSpending, weeklyAmount } from './flow';
 import { weekRanges } from './budget';
 
 /** Paid on the 15th and the last day; the house is saved for in two halves and paid on the 1st. */
@@ -173,6 +173,14 @@ describe('bank balance', () => {
       ['2026-11-15', 262_000],
     ]);
     expect(f.low).toEqual({ date: '2026-11-12', balance: 86_000 });
+  });
+
+  it('checks the projection against the money always kept in checking', () => {
+    let d = withBalance(household(), '2026-11-01', 100_000, '2026-11-01T12:00:00Z');
+    d = spend(d, '2026-11-07', 6_000, '2026-11-07T12:00:00Z');
+    const f = balanceForecast(d, '2026-11-10', 5)!; // lowest $860 on Nov 12
+    expect(floorCheck(f, 50_000)).toEqual({ floor: 50_000, spare: 36_000, under: null });
+    expect(floorCheck(f, 90_000)).toEqual({ floor: 90_000, spare: 0, under: { date: '2026-11-12', low: 86_000 } });
   });
 });
 

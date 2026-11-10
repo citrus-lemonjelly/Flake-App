@@ -241,3 +241,17 @@ export function monthFlows(data: AppData, today: ISODate, back: number, ahead: n
   const first = makeDate(year, month1, 1);
   return Array.from({ length: back + ahead + 1 }, (_, i) => monthFlow(data, addMonths(first, i - back), today));
 }
+
+/** How the projected balance sits against the money always kept in checking (Settings: Keep in checking). */
+export interface FloorCheck {
+  floor: Cents;
+  /** How much could go out over the period without dipping under the floor. */
+  spare: Cents;
+  /** The first day it's headed under the floor, and how low it gets. */
+  under: { date: ISODate; low: Cents } | null;
+}
+
+export function floorCheck(f: BalanceForecast, floor: Cents): FloorCheck {
+  const first = f.days.find((d) => d.balance < floor);
+  return { floor, spare: Math.max(0, f.low.balance - floor), under: first ? { date: first.date, low: f.low.balance } : null };
+}
