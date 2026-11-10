@@ -13,7 +13,6 @@ import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
 import { SyncSheet } from '../sheets/SyncSheet';
 import { ConfirmSheet } from '../sheets/ConfirmSheet';
 import { setGuide } from '../guide';
-import { resetTips } from '../ui/ScreenTip';
 import { ChangelogSheet } from '../sheets/ChangelogSheet';
 import { APP_VERSION, CHANGELOG } from '../changelog';
 import { syncLabel, useSyncStatus } from '../state/sync';
@@ -124,15 +123,6 @@ export function Settings() {
                 }}
               >
                 Show setup guide
-              </button>
-              <button
-                className="btn small ghost"
-                onClick={() => {
-                  resetTips();
-                  ui.toast('Tips will show again on each screen.');
-                }}
-              >
-                Show tips again
               </button>
             </div>
             <h3>Backup & data</h3>

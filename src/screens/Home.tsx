@@ -12,11 +12,12 @@ import { useSyncStatus } from '../state/sync';
 import { confirmStep, guideSteps, setGuide, type GuideStep, type GuideStepId } from '../guide';
 import { LogSheet } from '../sheets/LogSheet';
 import { PaySheet } from '../sheets/PaySheet';
-import { ScreenTip } from '../ui/ScreenTip';
+import { HelpTip } from '../ui/ScreenTip';
 import { Icon } from '../ui/icons';
 import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
 import { BalanceSheet } from '../sheets/BalanceSheet';
 import { Tick, useBillActions } from '../ui/billActions';
+import { useCountUp } from '../ui/motion';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
 const shortName = (n: string) => n.replace(/\s+(card|loan)$/i, '');
@@ -53,17 +54,18 @@ export function Home() {
     <>
       <header className="page-head">
         <div>
-          <h1>Hi, {name}</h1>
+          <div className="title-row">
+            <h1>Hi, {name}</h1>
+            <HelpTip label="How Home works">
+              <b>Left over</b> is this month's money in minus everything going out: bills, money set aside for bills you save up for, and spending. Tap <b>Log pay</b> when a paycheck lands to put in what really arrived.
+            </HelpTip>
+          </div>
           <div className="sub">
             {weekdayDate(x.today)}
             {nextPay && ` · next pay ${weekdayShort(nextPay.payday)}`}
           </div>
         </div>
       </header>
-
-      <ScreenTip id="home2">
-        <b>Left over</b> is this month's money in minus everything going out: bills, money set aside for bills you save up for, and spending. Tap <b>Log pay</b> when a paycheck lands to put in what really arrived.
-      </ScreenTip>
 
       <div className="home-grid">
         <div className="stack">
@@ -120,22 +122,8 @@ function GettingStarted() {
       </button>
     ) : null;
 
-  if (doneCount === required.length && !todo.length)
-    return (
-      <div className="card guide">
-        <div className="row">
-          <div>
-            <h3 style={{ margin: 0 }}>You're all set up 🎉</h3>
-            <div className="muted" style={{ fontSize: 13 }}>
-              From here on, log pay when it lands and tick bills off as you pay them.
-            </div>
-          </div>
-          <button className="btn small ghost" onClick={hide}>
-            Hide
-          </button>
-        </div>
-      </div>
-    );
+  // Once everything's set up, the guide gets out of the way.
+  if (doneCount === required.length && !todo.length) return null;
 
   const [next, ...rest] = todo;
   const done = steps.filter((s) => s.done);
@@ -220,6 +208,9 @@ function LeftOver() {
     .filter((i) => i.parts)
     .map((i) => ({ item: i, balance: bucketBalance(data, i) }));
   const share = flow.inTotal > 0 ? Math.min(1, flow.outTotal / flow.inTotal) : 1;
+  const left = useCountUp(flow.left);
+  const inTotal = useCountUp(flow.inTotal);
+  const outTotal = useCountUp(flow.outTotal);
   return (
     <section className="hero" aria-label="Left over this month">
       <div className="top">
@@ -228,7 +219,7 @@ function LeftOver() {
           + Log pay
         </button>
       </div>
-      <div className={`big ${flow.left < 0 ? 'neg' : ''}`}>{flow.left < 0 ? '−' : ''}{money(Math.abs(flow.left), true)}</div>
+      <div className={`big ${flow.left < 0 ? 'neg' : ''}`}>{left < 0 ? '−' : ''}{money(Math.abs(left), true)}</div>
       <div className="hero-sub">{flow.left < 0 ? 'More is going out than coming in this month.' : 'After bills, set-asides and spending · free for debt and savings'}</div>
       <div className="hero-split" role="img" aria-label={`${Math.round(share * 100)}% of the money coming in is going out`}>
         <i style={{ width: `${share * 100}%` }} />
@@ -236,12 +227,12 @@ function LeftOver() {
       <div className="hero-tiles">
         <div>
           <span>Money in</span>
-          <b>{money(flow.inTotal, true)}</b>
+          <b>{money(inTotal, true)}</b>
           <small>{money(flow.inSoFar, true)} arrived so far</small>
         </div>
         <div>
           <span>Money out</span>
-          <b>{money(flow.outTotal, true)}</b>
+          <b>{money(outTotal, true)}</b>
           <small>{money(flow.outSoFar, true)} out so far</small>
         </div>
       </div>
@@ -265,6 +256,7 @@ function BalanceCard() {
   const ui = useUI();
   const [day, setDay] = useState<number | null>(null);
   const f = useMemo(() => balanceForecast(data, x.today, 30), [data, x.today]);
+  const now = useCountUp(f?.now ?? 0);
 
   if (!f)
     return (
@@ -294,7 +286,7 @@ function BalanceCard() {
         </button>
       </h3>
       <div className="row" style={{ alignItems: 'baseline', marginTop: -6 }}>
-        <span className={`num big-num ${f.now < 0 ? 'over' : ''}`}>{f.now < 0 ? '−' : ''}{money(Math.abs(f.now))}</span>
+        <span className={`num big-num ${f.now < 0 ? 'over' : ''}`}>{now < 0 ? '−' : ''}{money(Math.abs(now))}</span>
         <span className="faint" style={{ fontSize: 12 }}>{typedToday ? 'today' : 'now (estimated)'}</span>
       </div>
       <div className="muted" style={{ fontSize: 13 }}>
@@ -303,8 +295,18 @@ function BalanceCard() {
         ) : (
           <>
             <span className="nowrap">From {money(f.entry.balance)} on {shortDate(f.entry.date)}</span>
-            {f.inSince > 0 && <span className="nowrap"> · +{money(f.inSince)} in</span>}
-            {f.outSince > 0 && <span className="nowrap"> · −{money(f.outSince)} out</span>}
+            {f.inSince > 0 && (
+              <>
+                {' '}
+                <span className="nowrap">· +{money(f.inSince)} in</span>
+              </>
+            )}
+            {f.outSince > 0 && (
+              <>
+                {' '}
+                <span className="nowrap">· −{money(f.outSince)} out</span>
+              </>
+            )}
           </>
         )}
       </div>
@@ -319,8 +321,8 @@ function BalanceCard() {
           </>
         ) : (
           <>
-            <b>The next 30 days</b>
-            <div>Point at a day to see the balance then.</div>
+            <b>Next 30 days</b>
+            <div>Point at the line to read any day.</div>
           </>
         )}
       </div>
