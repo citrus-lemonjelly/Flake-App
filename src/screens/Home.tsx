@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { addDays, balanceForecast, floorCheck, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
+import { addDays, balanceForecast, checkingFloor, floorCheck, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
 import { useData, useDerived, useUpdate } from '../state/store';
+import { updateSettings } from '../store/actions';
 import { useUI } from '../state/ui';
 import type { Derived } from '../state/derive';
 import { Bar, type Segment } from '../ui/components';
@@ -268,7 +269,8 @@ function BalanceCard() {
   const [day, setDay] = useState<number | null>(null);
   const f = useMemo(() => balanceForecast(data, x.today, 30), [data, x.today]);
   const now = useCountUp(f?.now ?? 0);
-  const floor = data.settings.cashBuffer;
+  const { amount: floor, chosen: floorChosen } = checkingFloor(data.settings);
+  const update = useUpdate();
 
   if (!f)
     return (
@@ -295,14 +297,38 @@ function BalanceCard() {
       <h3>
         Bank balance
         <span style={{ display: 'flex', gap: 14 }}>
-          <button className="link" style={{ color: 'var(--ink2)' }} onClick={() => ui.open(<FloorSheet />)}>
-            {floor ? `Keep ${money(floor, true)}` : 'Set a floor'}
-          </button>
+          {floorChosen && (
+            <button className="link" style={{ color: 'var(--ink2)' }} onClick={() => ui.open(<FloorSheet />)}>
+              {floor ? `Keep ${money(floor, true)}` : 'No floor'}
+            </button>
+          )}
           <button className="link" onClick={() => ui.open(<BalanceSheet />)}>
             Update
           </button>
         </span>
       </h3>
+      {!floorChosen && (
+        <div className="floor-prompt">
+          <div>
+            <b>Set a floor?</b>
+            <span>How much do you always want in checking? Flake will warn before the balance dips under it.</span>
+          </div>
+          <div className="floor-prompt-btns">
+            <button className="btn small" onClick={() => ui.open(<FloorSheet />)}>
+              Set a floor
+            </button>
+            <button
+              className="btn small ghost"
+              onClick={() => {
+                update((d) => updateSettings(d, { cashBuffer: 0, floorSet: true }));
+                ui.toast('No floor. You can set one later from Settings.');
+              }}
+            >
+              No floor
+            </button>
+          </div>
+        </div>
+      )}
       <div className="row" style={{ alignItems: 'baseline', marginTop: -6 }}>
         <span className={`num big-num ${f.now < 0 ? 'over' : ''}`}>{now < 0 ? '−' : ''}{money(Math.abs(now))}</span>
         <span className="faint" style={{ fontSize: 12 }}>{typedToday ? 'today' : 'now (estimated)'}</span>

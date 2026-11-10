@@ -12,6 +12,15 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.20.1',
+    date: '2026-11-10',
+    title: 'You choose the floor',
+    items: [
+      'Flake starts with no floor in checking. The Bank balance card asks once: set a floor, or choose no floor.',
+      'The old built-in $100 is no longer used as a floor unless you picked it.',
+    ],
+  },
+  {
     version: '0.20.0',
     date: '2026-11-10',
     title: 'Keep a floor in checking',

@@ -1,4 +1,4 @@
-import { loggedAt, type AppData, type BalanceCheckIn, type Category, type Cents, type Id, type ISODate, type Spending } from '../model/types';
+import { loggedAt, type AppData, type BalanceCheckIn, type Category, type Cents, type Id, type ISODate, type Settings, type Spending } from '../model/types';
 import { addDays, addMonths, daysBetween, makeDate, yearMonth } from './dates';
 import { live } from './live';
 import { sum } from './money';
@@ -254,4 +254,20 @@ export interface FloorCheck {
 export function floorCheck(f: BalanceForecast, floor: Cents): FloorCheck {
   const first = f.days.find((d) => d.balance < floor);
   return { floor, spare: Math.max(0, f.low.balance - floor), under: first ? { date: first.date, low: f.low.balance } : null };
+}
+
+/** The old app's untouched default for the floor ($100), which nobody chose. */
+const OLD_DEFAULT_FLOOR = 10_000;
+
+/**
+ * The money always kept in checking, if the household has chosen one. A floor set
+ * in this version, confirmed in the old setup guide, or changed from the old $100
+ * default counts as chosen; otherwise there's no floor yet and Home asks for one.
+ */
+export function checkingFloor(settings: Settings): { amount: Cents; chosen: boolean } {
+  const chosen =
+    settings.floorSet === true ||
+    (settings.guide?.confirmed ?? []).includes('keep') ||
+    (settings.cashBuffer > 0 && settings.cashBuffer !== OLD_DEFAULT_FLOOR);
+  return { amount: chosen ? settings.cashBuffer : 0, chosen };
 }

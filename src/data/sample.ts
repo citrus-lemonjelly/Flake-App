@@ -107,7 +107,7 @@ export function sampleData(): AppData {
   return {
     ...data,
     household: { name: 'Alex & Sam', people: ['Alex', 'Sam'], weekStartsOn: 5 },
-    settings: { ...data.settings, monthlyExtraForDebt: $(500), cashBuffer: $(150), billTiming: 'payday' },
+    settings: { ...data.settings, monthlyExtraForDebt: $(500), billTiming: 'payday' },
     incomes,
     debts: [mortgage, visa, store, car],
     bills: [
