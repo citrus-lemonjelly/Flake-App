@@ -21,6 +21,7 @@ export const CHANGELOG: Release[] = [
       'Ticking a bill pops a check (with a tiny buzz on Android); numbers count up, bars fill in and charts draw themselves.',
       'Pay the last bill of the month and Flake celebrates.',
       'Anyone who asks their phone for reduced motion gets none of the movement.',
+      'Fixed: Home could be wider than the phone screen and slide sideways (the bank balance line couldn’t wrap). Every page now fits, down to small phones like the iPhone SE.',
     ],
   },
   {

@@ -79,7 +79,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--line);
 }
-.tabbar button { border: 0; background: none; color: var(--ink3); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 500; padding: 4px 6px; min-width: 64px; }
+.tabbar button { border: 0; background: none; color: var(--ink3); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 500; padding: 4px 2px; flex: 1 1 0; min-width: 0; max-width: 84px; }
 .tabbar button[aria-current='page'] { color: var(--accent); }
 
 @media (min-width: 960px) {
@@ -137,7 +137,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 /* ---------- Cards & lists ---------- */
 .card { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 16px; min-width: 0; }
 :root[data-mode='dark'] .card { border: 1px solid var(--line); }
-.card > h3, .card-title { font-size: 15.5px; font-weight: 700; margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card > h3, .card-title { font-size: 15.5px; font-weight: 700; margin: 0 0 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; }
 .stack { display: flex; flex-direction: column; gap: 12px; }
 .section-title { font-family: var(--font-display); font-weight: 700; font-size: 18px; margin: 26px 4px 12px; display: flex; justify-content: space-between; align-items: center; }
 .label { font-size: 12px; color: var(--ink3); font-weight: 500; }
@@ -176,7 +176,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 /* ---------- Hero: Safe to spend (the only gradient block) ---------- */
 .hero { background: var(--grad); color: #fff; border-radius: var(--r-lg); padding: 18px 18px 16px; position: relative; overflow: hidden; }
 .hero .label { color: rgba(255, 255, 255, 0.85); display: flex; align-items: center; gap: 6px; }
-.hero .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hero .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .hero .big { font-family: var(--font-display); font-size: 46px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; margin: 10px 0 8px; }
 .hero .hero-sub { font-size: 14px; opacity: 0.92; }
 .hero .math-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; color: rgba(255, 255, 255, 0.92); }
@@ -258,9 +258,10 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .segkey .k-next { box-shadow: inset 0 0 0 2px var(--accent); background: var(--surface2); }
 
 /* ---------- Home grid ---------- */
-.home-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+.home-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.home-grid > *, .stack > * { min-width: 0; }
 @media (min-width: 960px) {
-  .home-grid { grid-template-columns: 1.35fr 1fr; align-items: start; }
+  .home-grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
   .home-grid .span2 { grid-column: 1 / -1; }
 }
 .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -280,10 +281,10 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .period-tabs::-webkit-scrollbar { display: none; }
 .period-tabs button { flex: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink2); font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 999px; }
 .period-tabs button[aria-pressed='true'] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.plan-grid { display: grid; gap: 12px; }
+.plan-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
 /* Let columns shrink to the screen; a chart's measured width otherwise holds them open. */
 .plan-grid > * { min-width: 0; }
-@media (min-width: 960px) { .plan-grid { grid-template-columns: 1fr 1fr; align-items: start; } .home-grid, .plan-grid, .stack { gap: 14px; } }
+@media (min-width: 960px) { .plan-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .home-grid, .plan-grid, .stack { gap: 14px; } }
 
 /* ---------- Debts ---------- */
 .debt-grid { display: grid; gap: 14px; }
@@ -461,10 +462,10 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .mbars-grid > div:last-child { border-top-style: solid; }
 .mbars-grid span { position: absolute; right: 0; top: -8px; font-size: 11px; color: var(--ink3); background: var(--surface); padding-left: 4px; }
 .mbars-cols { position: absolute; inset: 0 36px 0 0; display: flex; justify-content: space-around; }
-.mbar { border: 0; background: none; border-radius: 10px; padding: 0 4px; height: 150px; min-width: 40px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; color: var(--ink2); }
+.mbar { border: 0; background: none; border-radius: 10px; padding: 0 2px; height: 150px; flex: 1 1 0; min-width: 0; max-width: 56px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; color: var(--ink2); }
 .mbar.on { background: var(--surface2); color: var(--ink); }
 .mbar .pair { display: flex; align-items: flex-end; gap: 2px; }
-.mbar .pair i { width: 13px; border-radius: 4px 4px 0 0; display: block; }
+.mbar .pair i { width: clamp(8px, 3.4vw, 13px); border-radius: 4px 4px 0 0; display: block; }
 .mbar .pair .in { background: var(--flow-in); }
 .mbar .pair .out { background: var(--flow-out); }
 .mbar.planned .pair i { opacity: 0.5; }
@@ -574,4 +575,16 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 @media (prefers-reduced-motion: reduce) {
   .tick.done > span, .tick.done svg path, .bar > i, .hero-split > i, .mbar .pair i, .wbars-plot i, .draw, .fade-late, .card, .hero, .help-pop { animation: none; }
   .draw { stroke-dasharray: none; }
+}
+
+/* Small phones (iPhone SE and friends): a little less padding everywhere. */
+@media (max-width: 360px) {
+  .main { padding-left: 12px; padding-right: 12px; }
+  .card { padding: 14px; }
+  .hero { padding: 16px 14px 14px; }
+  .hero .big { font-size: 40px; }
+  .page-head h1 { font-size: 24px; }
+  .hero-tiles b { font-size: 18px; }
+  .mini-seg button { padding: 6px 8px; }
+  .ms-strip { margin: 0 -12px 14px; padding: 2px 12px 6px; }
 }
