@@ -22,6 +22,7 @@ export function MonthBars({ months, today, selected, onSelect }: { months: Month
           return (
             <button
               key={m.start}
+              style={{ ['--i' as string]: i }}
               className={`mbar ${i === selected ? 'on' : ''} ${planned ? 'planned' : ''}`}
               onClick={() => onSelect(i)}
               aria-pressed={i === selected}
@@ -102,10 +103,10 @@ export function MonthLines({ flow, today, day, onDay }: { flow: MonthFlow; today
           <line key={f} x1={padL} x2={W - padR} y1={y(top * f)} y2={y(top * f)} stroke="var(--line)" strokeDasharray={f ? '3 4' : undefined} />
         ))}
         {hasPast && hasFuture && <line x1={x(cut)} x2={x(cut)} y1={padT} y2={y(0)} stroke="var(--ink3)" strokeDasharray="3 3" />}
-        {hasPast && <path d={step(ins, 0, cut)} fill="none" stroke="var(--flow-in)" strokeWidth={2.5} strokeLinejoin="round" />}
-        {hasFuture && <path d={step(ins, cut, n - 1)} fill="none" stroke="var(--flow-in)" strokeWidth={2} strokeDasharray="4 4" opacity={0.8} />}
-        {hasPast && <path d={path(outs, 0, cut)} fill="none" stroke="var(--flow-out)" strokeWidth={2.5} strokeLinejoin="round" />}
-        {hasFuture && <path d={path(outs, cut, n - 1)} fill="none" stroke="var(--flow-out)" strokeWidth={2} strokeDasharray="4 4" opacity={0.8} />}
+        {hasPast && <path className="draw" pathLength={1} d={step(ins, 0, cut)} fill="none" stroke="var(--flow-in)" strokeWidth={2.5} strokeLinejoin="round" />}
+        {hasFuture && <path className="fade-late" d={step(ins, cut, n - 1)} fill="none" stroke="var(--flow-in)" strokeWidth={2} strokeDasharray="4 4" opacity={0.8} />}
+        {hasPast && <path className="draw" pathLength={1} d={path(outs, 0, cut)} fill="none" stroke="var(--flow-out)" strokeWidth={2.5} strokeLinejoin="round" />}
+        {hasFuture && <path className="fade-late" d={path(outs, cut, n - 1)} fill="none" stroke="var(--flow-out)" strokeWidth={2} strokeDasharray="4 4" opacity={0.8} />}
         <text x={W - padR + 8} y={labelY(ins[n - 1]!, outs[n - 1]!)} fontSize="12" fill="var(--ink)">
           <tspan fontWeight="700">In</tspan>
           <tspan x={W - padR + 8} dy="14" fill="var(--ink2)">{money(ins[n - 1]!, true)}</tspan>
@@ -190,8 +191,8 @@ export function BalanceLine({ days, lowIndex, day, onDay }: { days: { date: stri
             </text>
           </g>
         ))}
-        <path d={area} fill="var(--accent)" opacity={0.1} />
-        <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
+        <path className="fade-late" d={area} fill="var(--accent)" opacity={0.1} />
+        <path className="draw" pathLength={1} d={line} fill="none" stroke="var(--accent)" strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
         <circle cx={x(lowIndex)} cy={y(low.balance)} r={4.5} fill={low.balance < 0 ? 'var(--bad)' : 'var(--surface)'} stroke={low.balance < 0 ? 'var(--surface)' : 'var(--accent)'} strokeWidth={2} />
         <text x={x(lowIndex) + (lowRight ? -6 : 6)} y={y(low.balance) + (y(low.balance) > H - padB - 14 ? -8 : 16)} fontSize="11" fontWeight="600" fill={low.balance < 0 ? 'var(--bad)' : 'var(--ink2)'} textAnchor={lowRight ? 'end' : 'start'}>
           Low {money(low.balance, true)}

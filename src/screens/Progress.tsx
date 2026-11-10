@@ -12,7 +12,7 @@ import { DebtSheet, FundSheet } from '../sheets/EditSheets';
 import { MilestoneSheet } from '../sheets/MilestoneSheet';
 import { PayoffSheet, STRATEGIES } from '../sheets/PayoffSheet';
 import { DebtTrackSheet, FundTrackSheet, debtOutlook } from '../sheets/TrackSheets';
-import { ScreenTip } from '../ui/ScreenTip';
+import { HelpTip } from '../ui/ScreenTip';
 import { debtSegments } from './Home';
 
 type Show = 'all' | 'debts' | 'goals';
@@ -59,17 +59,18 @@ export function Progress() {
     <>
       <header className="page-head">
         <div>
-          <h1>Debt &amp; goals</h1>
+          <div className="title-row">
+            <h1>Debt &amp; goals</h1>
+            <HelpTip label="How Debt & goals works">
+              Milestones run along the top and only get a check when a real balance gets there. Every debt and savings goal has its own row: tap one to see its progress, projected finish and every payment or deposit. Change the payoff order and extra money under Payoff plan.
+            </HelpTip>
+          </div>
           <div className="sub">
             {x.sim.debtFreeDate ? `Debt-free est. ${monthYear(x.sim.debtFreeDate)} · ` : ''}
             {money(owed, true)} owed · {money(saved, true)} saved
           </div>
         </div>
       </header>
-
-      <ScreenTip id="progress">
-        milestones run along the top and only get a check when a real balance gets there. Every debt and savings goal has its own row: tap one to see its progress, projected finish and every payment or deposit. Change the payoff order and extra money under Payoff plan.
-      </ScreenTip>
 
       <Milestones />
 

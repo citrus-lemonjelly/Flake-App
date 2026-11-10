@@ -12,6 +12,19 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.16.0',
+    date: '2026-11-10',
+    title: 'Sleeker and livelier',
+    items: [
+      'Tighter, calmer layout: less padding, lighter shadows, and the “How this works” banners are now a small ? beside each page title.',
+      'The setup guide disappears once everything is set up.',
+      'Ticking a bill pops a check (with a tiny buzz on Android); numbers count up, bars fill in and charts draw themselves.',
+      'Pay the last bill of the month and Flake celebrates.',
+      'Anyone who asks their phone for reduced motion gets none of the movement.',
+      'Fixed: Home could be wider than the phone screen and slide sideways (the bank balance line couldn’t wrap). Every page now fits, down to small phones like the iPhone SE.',
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2026-11-10',
     title: 'Bank balance, now and ahead',

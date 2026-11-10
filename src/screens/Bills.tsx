@@ -6,7 +6,7 @@ import { BillSheet } from '../sheets/EditSheets';
 import { Bar, Empty } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { money, shortDate, weekdayDate } from '../ui/format';
-import { ScreenTip } from '../ui/ScreenTip';
+import { HelpTip } from '../ui/ScreenTip';
 import { Tick, useBillActions } from '../ui/billActions';
 
 const WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -45,7 +45,12 @@ export function Bills() {
     <>
       <header className="page-head">
         <div>
-          <h1>Bills</h1>
+          <div className="title-row">
+            <h1>Bills</h1>
+            <HelpTip label="How Bills works">
+              Tap the circle when a bill is paid; it counts for that month only. Bills are grouped by the day they're paid, so bills paid from the same paycheck sit together. Card and loan payments show here too; add or change those on the Debt page.
+            </HelpTip>
+          </div>
           <div className="sub">Everything due each month, in one place</div>
         </div>
         <div className="actions">
@@ -54,10 +59,6 @@ export function Bills() {
           </button>
         </div>
       </header>
-
-      <ScreenTip id="bills">
-        Tap the circle when a bill is paid; it counts for that month only. Bills are grouped by the day they're paid, so bills paid from the same paycheck sit together. Card and loan payments show here too; add or change those on the Debt page.
-      </ScreenTip>
 
       <div className="month-nav">
         <button className="icon-btn" aria-label="Previous month" onClick={() => setOffset(offset - 1)}>

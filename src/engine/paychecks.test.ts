@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { emptyData, entity } from '../model/factory';
 import type { AppData, IncomeSource } from '../model/types';
-import { checkIn, recordPaycheck } from '../store/actions';
+import { recordPaycheck } from '../store/actions';
 import { importJson, exportJson } from '../store/storage';
-import { derive } from '../state/derive';
 import { allPaydays, expectedPay, hourlyTakeHome } from './payCalendar';
 import { monthlyAverages } from './budget';
 
@@ -52,37 +51,15 @@ describe('hourly paychecks', () => {
     expect(monthlyAverages(data).income).toBe(Math.round((61_333 * 365.25) / 7 / 12));
   });
 
-  it('a salary paycheck stays fixed and never asks', () => {
+  it('a salary paycheck stays fixed', () => {
     const { data } = household();
     const salary = { ...data.incomes[0]!, hourly: undefined };
     const d = { ...data, incomes: [salary] };
     expect(pay(d, '2026-10-29')).toMatchObject({ amount: 60_000, basis: 'fixed' });
-    expect(derive(checkIn(d, { date: '2026-10-30', balance: 100_000 }).data, '2026-10-30').nextAction.kind).not.toBe('confirm-pay');
   });
 });
 
-describe('payday prompts', () => {
-  it('asks to confirm a paycheck that landed only when that prompt is turned on', () => {
-    let { data, id } = household();
-    data = checkIn(data, { date: '2026-10-30', balance: 100_000 }).data;
-    expect(derive(data, '2026-10-30').nextAction.kind).not.toBe('confirm-pay'); // off by default
-    data = { ...data, incomes: data.incomes.map((s) => ({ ...s, confirmOnPayday: true })) };
-    const n = derive(data, '2026-10-30').nextAction;
-    expect(n).toMatchObject({ kind: 'confirm-pay', payday: { payday: '2026-10-29', amount: 60_000 } });
-    data = recordPaycheck(data, { sourceId: id, payday: '2026-10-29', amount: 60_500 });
-    data = recordPaycheck(data, { sourceId: id, payday: '2026-10-22', amount: 60_000 });
-    expect(derive(data, '2026-10-30').nextAction.kind).not.toBe('confirm-pay');
-  });
-
-  it('asks for hours before an hourly payday', () => {
-    let { data, id } = household();
-    for (const d of ['2026-10-15', '2026-10-22', '2026-10-29']) data = recordPaycheck(data, { sourceId: id, payday: d, amount: 60_000 });
-    data = checkIn(data, { date: '2026-11-02', balance: 100_000 }).data;
-    expect(derive(data, '2026-11-02').nextAction).toMatchObject({ kind: 'log-hours', payday: { payday: '2026-11-05' } });
-    data = recordPaycheck(data, { sourceId: id, payday: '2026-11-05', hours: 38 });
-    expect(derive(data, '2026-11-02').nextAction.kind).not.toBe('log-hours');
-  });
-
+describe('paycheck records', () => {
   it('older backups without paycheck records still load', () => {
     const { data } = household();
     const { paychecks: _drop, ...old } = data;

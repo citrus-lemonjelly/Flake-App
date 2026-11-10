@@ -9,7 +9,7 @@ import { SpendingSheet } from '../sheets/SpendingSheet';
 import { Bar, Empty } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { money, shortDate, weekdayDate } from '../ui/format';
-import { ScreenTip } from '../ui/ScreenTip';
+import { HelpTip } from '../ui/ScreenTip';
 import { Tick, useBillActions } from '../ui/billActions';
 
 /** Spending week by week: each budget, the purchases, and the bills leaving the bank that week. */
@@ -35,7 +35,12 @@ export function Spending() {
     <>
       <header className="page-head">
         <div>
-          <h1>Spending</h1>
+          <div className="title-row">
+            <h1>Spending</h1>
+            <HelpTip label="How Spending works">
+              Each bucket is money for one kind of spending each week. Tap a bucket's <b>+</b> to log a purchase into it, or the bucket itself to see its purchases. Bills that leave the bank this week are listed too, so the whole week is in one place.
+            </HelpTip>
+          </div>
           <div className="sub">Weekly buckets · weeks start {new Date(`${w.start}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}</div>
         </div>
         <div className="actions">
@@ -44,10 +49,6 @@ export function Spending() {
           </button>
         </div>
       </header>
-
-      <ScreenTip id="spending">
-        Each bucket is money for one kind of spending each week. Tap a bucket's <b>+</b> to log a purchase into it, or the bucket itself to see its purchases. Bills that leave the bank this week are listed too, so the whole week is in one place.
-      </ScreenTip>
 
       {notWeekly.length > 0 && (
         <div className="notice" style={{ marginBottom: 14, alignItems: 'center' }}>
@@ -231,7 +232,7 @@ function WeekBars({ weeks, budget, onPick }: { weeks: ReturnType<typeof weekSpen
       <div className="wbars-plot" style={{ height: H + 22 }}>
         {budget > 0 && <div className="wbars-line" style={{ bottom: 22 + (budget / top) * H }} />}
         {weeks.map((w, i) => (
-          <button key={w.start} className={i === 5 ? 'on' : ''} onClick={() => onPick(i)} aria-pressed={i === 5} aria-label={`Week of ${shortDate(w.start)}: ${money(w.spent)} spent`}>
+          <button key={w.start} style={{ ['--i' as string]: i }} className={i === 5 ? 'on' : ''} onClick={() => onPick(i)} aria-pressed={i === 5} aria-label={`Week of ${shortDate(w.start)}: ${money(w.spent)} spent`}>
             <i style={{ height: Math.max(2, (w.spent / top) * H) }} className={w.spent > w.budget ? 'over' : ''} />
             <span>{shortDate(w.start)}</span>
           </button>
