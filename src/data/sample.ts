@@ -93,7 +93,14 @@ export function sampleData(): AppData {
     settings: { ...data.settings, monthlyExtraForDebt: $(500), cashBuffer: $(150), billTiming: 'payday' },
     incomes,
     debts: [mortgage, visa, store, car],
-    bills: [bill('Electric', 120, 3), bill('Internet', 70, 8), bill('Phones', 95, 14), bill('Insurance', 160, 25)],
+    bills: [
+      { ...bill('Electric', 120, 3), autoTick: true, autoTickSince: asOf },
+      bill('Internet', 70, 8),
+      bill('Phones', 95, 14),
+      bill('Insurance', 160, 25),
+      // Due once a year, saved for a little from every paycheck.
+      { ...bill('Car registration', 240, 15), every: 12, anchor: '2027-04-15', savePerPaycheck: true },
+    ],
     categories: [
       entity<Category>({ name: 'Groceries', amount: $(140), cadence: 'weekly' }),
       entity<Category>({ name: 'Gas', amount: $(45), cadence: 'weekly' }),

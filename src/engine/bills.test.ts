@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { emptyData, entity } from '../model/factory';
 import type { AppData, BalanceCheckIn, Bill, Category, IncomeSource, Spending } from '../model/types';
-import { budgetsToWeekly, logSpending, markBillPaid, setAsidePart, updateSettings } from '../store/actions';
+import { autoTickBills, budgetsToWeekly, logSpending, markBillPaid, setAsidePart, setBillAmount, updateSettings } from '../store/actions';
 import type { DebtPayment } from '../model/types';
-import { billItems, outflowsBetween, partDates } from './outflows';
-import { billsDue, bucketBalance, savingFor, splitStatus } from './bills';
+import { billItems, dueDatesIn, outflowsBetween, partDates } from './outflows';
+import { autoTickDue, billsDue, bucketBalance, savingFor, splitStatus } from './bills';
 import { balanceForecast, monthFlow, weekSpending, weeklyAmount } from './flow';
 import { weekRanges } from './budget';
 
@@ -173,5 +173,73 @@ describe('bank balance', () => {
       ['2026-11-15', 262_000],
     ]);
     expect(f.low).toEqual({ date: '2026-11-12', balance: 86_000 });
+  });
+});
+
+describe('bills due every few months', () => {
+  const withBill = (b: Partial<Bill>): AppData => {
+    const d = household();
+    return { ...d, bills: [...d.bills, entity<Bill>({ name: 'X', amount: 30_000, dueDay: 1, funding: 'due-date', owner: 'A', autopay: false, ...b })] };
+  };
+  const item = (d: AppData) => billItems(d).find((i) => i.name === 'X')!;
+
+  it('comes due only in its months, on its day', () => {
+    const d = withBill({ every: 6, anchor: '2026-12-05' });
+    expect(dueDatesIn(item(d), '2026-11-01', '2027-06-30')).toEqual(['2026-12-05', '2027-06-05']);
+    expect(billsDue(d, '2026-11-01', '2026-11-30').some((o) => o.item.name === 'X')).toBe(false);
+  });
+
+  it('saves an even share from every paycheck between due dates', () => {
+    const d = withBill({ name: 'X', amount: 120_000, every: 12, anchor: '2027-03-20', savePerPaycheck: true });
+    const st = splitStatus(d, item(d), '2027-03-20');
+    expect(st.parts).toHaveLength(24);
+    expect(st.parts.every((p) => p.amount === 5_000)).toBe(true);
+    const nov = outflowsBetween(d, '2026-11-01', '2026-11-30').filter((o) => o.itemId === item(d).itemId);
+    expect(nov.map((o) => [o.date, o.amount])).toEqual([
+      ['2026-11-13', 5_000],
+      ['2026-11-30', 5_000],
+    ]);
+    expect(savingFor(d, item(d), '2026-11-01')).toBe('2027-03-20');
+  });
+});
+
+describe('autopay', () => {
+  const autopay = (since: string): AppData => {
+    const d = household();
+    return { ...d, bills: d.bills.map((b) => (b.name === 'Phone' ? { ...b, autoTick: true, autoTickSince: since } : b)) };
+  };
+
+  it('finds autopay bills that came due since it was turned on', () => {
+    expect(autoTickDue(autopay('2026-11-01'), '2026-11-19').map((o) => o.item.name)).toEqual([]);
+    expect(autoTickDue(autopay('2026-11-01'), '2026-11-20').map((o) => [o.item.name, o.dueDate])).toEqual([['Phone', '2026-11-20']]);
+    expect(autoTickDue(autopay('2026-11-21'), '2026-12-01')).toEqual([]); // turned on after it was due
+  });
+
+  it('ticks them off, and an undo sticks', () => {
+    let d = autopay('2026-11-01');
+    const due = autoTickDue(d, '2026-11-20');
+    d = autoTickBills(d, due.map((o) => ({ itemKind: o.item.itemKind, itemId: o.item.itemId, dueDate: o.dueDate, planned: o.planned })));
+    expect(billsDue(d, '2026-11-20', '2026-11-20')[0]).toMatchObject({ paid: true, auto: true, payDate: '2026-11-20' });
+    expect(autoTickDue(d, '2026-11-21')).toEqual([]);
+    const o = billsDue(d, '2026-11-20', '2026-11-20')[0]!;
+    d = markBillPaid(d, { itemKind: 'bill', itemId: o.item.itemId, dueDate: o.dueDate, planned: o.planned, today: '2026-11-21' }, false);
+    expect(billsDue(d, '2026-11-20', '2026-11-20')[0]!.paid).toBe(false);
+    expect(autoTickDue(d, '2026-11-22')).toEqual([]); // not ticked again
+  });
+});
+
+describe("this month's amount", () => {
+  it('changes one month only, and survives ticking on and off', () => {
+    let d = household();
+    const phone = billItems(d).find((i) => i.name === 'Phone')!;
+    const p = { itemKind: 'bill' as const, itemId: phone.itemId, dueDate: '2026-11-20', planned: '2026-11-13' };
+    d = setBillAmount(d, p, 9_500);
+    expect(billsDue(d, '2026-11-01', '2026-11-30').find((o) => o.item.name === 'Phone')).toMatchObject({ amount: 9_500, changed: true });
+    expect(billsDue(d, '2026-12-01', '2026-12-31').find((o) => o.item.name === 'Phone')!.amount).toBe(8_000);
+    d = markBillPaid(d, { ...p, today: '2026-11-13' }, true);
+    d = markBillPaid(d, { ...p, today: '2026-11-13' }, false);
+    expect(billsDue(d, '2026-11-01', '2026-11-30').find((o) => o.item.name === 'Phone')!.amount).toBe(9_500);
+    d = setBillAmount(d, p, null);
+    expect(billsDue(d, '2026-11-01', '2026-11-30').find((o) => o.item.name === 'Phone')).toMatchObject({ amount: 8_000, changed: false });
   });
 });

@@ -8,6 +8,7 @@ export const minus = (c: Cents, whole = false) => (c ? '−' : '') + money(Math.
 const fmt = (d: ISODate, o: Intl.DateTimeFormatOptions) => parseDate(d).toLocaleDateString('en-US', { timeZone: 'UTC', ...o });
 export const shortDate = (d: ISODate) => fmt(d, { month: 'short', day: 'numeric' });
 export const monthYear = (d: ISODate) => fmt(d, { month: 'short', year: 'numeric' });
+export const fullDate = (d: ISODate) => fmt(d, { month: 'short', day: 'numeric', year: 'numeric' });
 export const monthOnly = (d: ISODate) => fmt(d, { month: 'short' });
 export const weekdayDate = (d: ISODate) => fmt(d, { weekday: 'short', month: 'short', day: 'numeric' });
 export const weekdayShort = (d: ISODate) => fmt(d, { weekday: 'short' });

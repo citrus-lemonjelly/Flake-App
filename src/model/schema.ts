@@ -25,6 +25,7 @@ const minPayment = z.discriminatedUnion('type', [
 ]);
 
 const parts = z.array(z.object({ day: dueDay, amount: cents })).optional();
+const autoTick = { autoTick: z.boolean().optional(), autoTickSince: date.optional() };
 
 const allocationTarget = z.object({ type: z.enum(['debt', 'fund', 'category']), id: z.string() });
 
@@ -76,7 +77,7 @@ export const appDataSchema = z.object({
   ),
   // Added after v1 shipped; older backups get an empty list.
   billPayments: z
-    .array(z.object({ ...base, itemKind: z.enum(['bill', 'debt']), itemId: z.string(), dueDate: date, paidOn: date, amount: cents.nullable(), paid: z.boolean().optional() }))
+    .array(z.object({ ...base, itemKind: z.enum(['bill', 'debt']), itemId: z.string(), dueDate: date, paidOn: date, amount: cents.nullable(), paid: z.boolean().optional(), auto: z.boolean().optional(), autoSkip: z.boolean().optional() }))
     .default([]),
   setAsides: z
     .array(z.object({ ...base, itemKind: z.enum(['bill', 'debt']), itemId: z.string(), dueDate: date, part: z.number().int().min(0), date, amount: cents }))
@@ -88,7 +89,14 @@ export const appDataSchema = z.object({
     z.object({ ...base, date, amount: cents, sourceId: z.string().nullable(), kind: z.enum(['bonus', 'other']), note: z.string() }),
   ),
   bills: z.array(
-    z.object({ ...base, name: z.string(), amount: cents, dueDay, funding, owner, autopay: z.boolean(), paidOn: z.enum(['payday', 'due-date']).optional(), parts }),
+    z.object({ ...base, name: z.string(), amount: cents, dueDay, funding, owner, autopay: z.boolean(),
+      paidOn: z.enum(['payday', 'due-date']).optional(),
+      parts,
+      every: z.number().int().min(1).max(12).optional(),
+      anchor: date.optional(),
+      savePerPaycheck: z.boolean().optional(),
+      ...autoTick,
+    }),
   ),
   categories: z.array(
     z.object({ ...base, name: z.string(), amount: cents, cadence: z.enum(['weekly', 'per-period', 'monthly']), icon: z.string().optional() }),
@@ -113,6 +121,7 @@ export const appDataSchema = z.object({
       originalBalance: cents.optional(),
       paidOn: z.enum(['payday', 'due-date']).optional(),
       parts,
+      ...autoTick,
     }),
   ),
   debtPayments: z.array(

@@ -1,17 +1,23 @@
 import type { AppData, Cents, ISODate, SetAside } from '../model/types';
-import { addMonths, clampedDay, makeDate, yearMonth } from './dates';
+import { addDays, addMonths, clampedDay, makeDate, yearMonth } from './dates';
 import { live } from './live';
 import { sum } from './money';
-import { billItems, coveringPayday, partDates, type BillItem } from './outflows';
+import { billItems, coveringPayday, dueDatesIn, occurrenceParts, type BillItem } from './outflows';
 
 /** One month's occurrence of a bill or debt payment, for the Bills page. */
 export interface BillOccurrence {
   item: BillItem;
   dueDate: ISODate;
-  /** When it's planned to leave (or did): payday, due date, or the date it was marked paid. */
+  /** When it's planned to leave: the covering payday, or the due date (autopay, or paid from a bucket). */
+  planned: ISODate;
+  /** When it leaves (or did): planned, or the date it was marked paid. */
   payDate: ISODate;
+  /** This month's amount: usually the bill's amount, unless it was changed for this month. */
   amount: Cents;
+  changed: boolean;
   paid: boolean;
+  /** Ticked off by autopay. */
+  auto: boolean;
 }
 
 const key = (i: { itemKind: string; itemId: string }, dueDate: ISODate) => `${i.itemKind}:${i.itemId}:${dueDate}`;
@@ -20,18 +26,22 @@ const key = (i: { itemKind: string; itemId: string }, dueDate: ISODate) => `${i.
 export function billsDue(data: AppData, start: ISODate, end: ISODate): BillOccurrence[] {
   const records = new Map(live(data.billPayments).map((p) => [key(p, p.dueDate), p]));
   const out: BillOccurrence[] = [];
-  const { year, month1 } = yearMonth(start);
-  for (let m = makeDate(year, month1, 1); m <= end; m = addMonths(m, 1)) {
-    const ym = yearMonth(m);
-    for (const item of billItems(data)) {
-      const dueDate = clampedDay(ym.year, ym.month1, item.dueDay);
-      if (dueDate < start || dueDate > end) continue;
+  for (const item of billItems(data))
+    for (const dueDate of dueDatesIn(item, start, end)) {
       const rec = records.get(key(item, dueDate));
-      // A bill saved for in parts is paid from its bucket on the due date.
-      const planned = item.parts || item.timing === 'due-date' ? dueDate : coveringPayday(data, dueDate);
-      out.push({ item, dueDate, payDate: rec?.paidOn ?? planned, amount: rec?.amount ?? item.amount, paid: rec?.paid === true });
+      // A bill saved for in parts is paid from its bucket on the due date; so is autopay.
+      const planned = item.saves || item.timing === 'due-date' || item.autoTickSince ? dueDate : coveringPayday(data, dueDate);
+      out.push({
+        item,
+        dueDate,
+        planned,
+        payDate: rec?.paidOn ?? planned,
+        amount: rec?.amount ?? item.amount,
+        changed: rec?.amount != null && rec.amount !== item.amount,
+        paid: rec?.paid === true,
+        auto: rec?.auto === true,
+      });
     }
-  }
   return out.sort((a, b) => a.payDate.localeCompare(b.payDate) || a.dueDate.localeCompare(b.dueDate) || a.item.name.localeCompare(b.item.name));
 }
 
@@ -54,12 +64,10 @@ export interface SplitStatus {
 }
 
 export function splitStatus(data: AppData, item: BillItem, dueDate: ISODate): SplitStatus {
-  const parts = item.parts ?? [];
   const asides = live(data.setAsides).filter((s) => s.itemKind === item.itemKind && s.itemId === item.itemId && s.dueDate === dueDate);
-  const planned = partDates(data, parts, dueDate);
-  const statuses = parts.map((p, index): PartStatus => {
+  const statuses = occurrenceParts(data, item, dueDate).map((p, index): PartStatus => {
     const done = asides.find((s) => s.part === index) ?? null;
-    return { index, amount: done?.amount ?? p.amount, date: done?.date ?? planned[index]!, done };
+    return { index, amount: done?.amount ?? p.amount, date: done?.date ?? p.date, done };
   });
   const rec = live(data.billPayments).find((p) => key(p, p.dueDate) === key(item, dueDate));
   return {
@@ -78,13 +86,25 @@ export function splitStatus(data: AppData, item: BillItem, dueDate: ISODate): Sp
  */
 export function savingFor(data: AppData, item: BillItem, monthStart: ISODate): ISODate {
   const { year, month1 } = yearMonth(monthStart);
+  const first = makeDate(year, month1, 1);
   const monthEnd = clampedDay(year, month1, 31);
-  const candidates = [0, 1].map((n) => {
-    const ym = yearMonth(addMonths(makeDate(year, month1, 1), n));
-    return clampedDay(ym.year, ym.month1, item.dueDay);
+  const candidates = dueDatesIn(item, first, addDays(addMonths(first, item.every + 1), -1));
+  const inMonth = (d: ISODate) => d >= first && d <= monthEnd;
+  return candidates.find((due) => occurrenceParts(data, item, due).some((p) => inMonth(p.date))) ?? candidates.find((d) => d > monthEnd) ?? candidates[0]!;
+}
+
+/**
+ * Autopay bills that have come due and haven't been ticked off (or undone):
+ * from the day autopay was turned on, up to five weeks back.
+ */
+export function autoTickDue(data: AppData, today: ISODate): BillOccurrence[] {
+  const records = new Map(live(data.billPayments).map((p) => [key(p, p.dueDate), p]));
+  const from = addDays(today, -35);
+  return billsDue(data, from, today).filter((o) => {
+    if (!o.item.autoTickSince || o.planned > today || o.dueDate < o.item.autoTickSince) return false;
+    const rec = records.get(key(o.item, o.dueDate));
+    return !rec?.paid && !rec?.autoSkip;
   });
-  const inMonth = (d: ISODate) => d >= makeDate(year, month1, 1) && d <= monthEnd;
-  return candidates.find((due) => partDates(data, item.parts ?? [], due).some(inMonth)) ?? candidates[1]!;
 }
 
 /**

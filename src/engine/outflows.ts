@@ -1,7 +1,8 @@
 import type { AppData, Cents, Debt, Id, ISODate, PaidOn, SavePart } from '../model/types';
 import { addMonths, clampedDay, daysBetween, makeDate, yearMonth } from './dates';
 import { live } from './live';
-import { periodContaining } from './payCalendar';
+import { splitEvenly } from './money';
+import { payPeriods, periodContaining } from './payCalendar';
 
 /** The monthly amount a debt asks for: minimum (or fixed payment) plus escrow and extra principal. */
 export function debtMonthlyPayment(debt: Debt): Cents {
@@ -21,19 +22,102 @@ export interface BillItem {
   amount: Cents;
   dueDay: number;
   timing: PaidOn;
-  /** Saved for in parts from paychecks, then paid from that bucket on the due date. */
+  /** Saved for in parts on set days of the month, then paid from that bucket on the due date. */
   parts?: SavePart[];
+  /** Saved for with an even share from every paycheck between due dates (bills due every few months). */
+  perPaycheck?: boolean;
+  /** True for either way of saving up: the payment comes out of a bucket, not a paycheck. */
+  saves: boolean;
+  /** Due every this many months (1 = monthly). */
+  every: number;
+  /** A due date in the cycle, for bills due less often than monthly. */
+  anchor?: ISODate;
+  /** Ticks itself off as paid on its date, from this day on. */
+  autoTickSince?: ISODate;
 }
 
 /** Every bill and every open debt with a due day and a payment. */
 export function billItems(data: AppData): BillItem[] {
   const parts = (p: SavePart[] | undefined) => (p && p.length ? p : undefined);
   return [
-    ...live(data.bills).map((b) => ({ itemKind: 'bill' as const, itemId: b.id, name: b.name, amount: b.amount, dueDay: b.dueDay, timing: b.paidOn ?? data.settings.billTiming, parts: parts(b.parts) })),
+    ...live(data.bills).map((b): BillItem => {
+      const every = b.every && b.every > 1 && b.anchor ? b.every : 1;
+      const perPaycheck = every > 1 && !!b.savePerPaycheck;
+      const p = perPaycheck ? undefined : parts(b.parts);
+      return {
+        itemKind: 'bill',
+        itemId: b.id,
+        name: b.name,
+        amount: b.amount,
+        dueDay: every > 1 ? Number(b.anchor!.slice(8)) : b.dueDay,
+        timing: b.paidOn ?? data.settings.billTiming,
+        parts: p,
+        perPaycheck,
+        saves: perPaycheck || !!p,
+        every,
+        anchor: every > 1 ? b.anchor : undefined,
+        autoTickSince: b.autoTick ? (b.autoTickSince ?? '0000-01-01') : undefined,
+      };
+    }),
     ...live(data.debts)
       .filter((d) => d.balance !== 0 && d.dueDay !== null)
-      .map((d) => ({ itemKind: 'debt' as const, itemId: d.id, name: d.name, amount: debtMonthlyPayment(d), dueDay: d.dueDay!, timing: d.paidOn ?? data.settings.billTiming, parts: parts(d.parts) })),
+      .map((d): BillItem => {
+        const p = parts(d.parts);
+        return {
+          itemKind: 'debt',
+          itemId: d.id,
+          name: d.name,
+          amount: debtMonthlyPayment(d),
+          dueDay: d.dueDay!,
+          timing: d.paidOn ?? data.settings.billTiming,
+          parts: p,
+          saves: !!p,
+          every: 1,
+          autoTickSince: d.autoTick ? (d.autoTickSince ?? '0000-01-01') : undefined,
+        };
+      }),
   ].filter((i) => i.amount > 0);
+}
+
+const monthIndex = (d: ISODate) => Number(d.slice(0, 4)) * 12 + Number(d.slice(5, 7)) - 1;
+
+/** Whether the item is due in the calendar month of `month` (always, for monthly bills). */
+export function dueInMonth(item: BillItem, month: ISODate): boolean {
+  if (item.every <= 1 || !item.anchor) return true;
+  return (((monthIndex(month) - monthIndex(item.anchor)) % item.every) + item.every) % item.every === 0;
+}
+
+/** The item's due dates in [start, end]. */
+export function dueDatesIn(item: BillItem, start: ISODate, end: ISODate): ISODate[] {
+  const out: ISODate[] = [];
+  const { year, month1 } = yearMonth(start);
+  for (let m = makeDate(year, month1, 1); m <= end; m = addMonths(m, 1)) {
+    if (!dueInMonth(item, m)) continue;
+    const ym = yearMonth(m);
+    const d = clampedDay(ym.year, ym.month1, item.dueDay);
+    if (d >= start && d <= end) out.push(d);
+  }
+  return out;
+}
+
+/**
+ * The parts saved toward the payment due on `dueDate`, with when each is set
+ * aside: on set days of the month before it's due, or one even share on every
+ * payday since the previous due date.
+ */
+export function occurrenceParts(data: AppData, item: BillItem, dueDate: ISODate): { date: ISODate; amount: Cents }[] {
+  if (item.parts) {
+    const dates = partDates(data, item.parts, dueDate);
+    return item.parts.map((p, i) => ({ date: dates[i]!, amount: p.amount }));
+  }
+  if (!item.perPaycheck) return [];
+  const prev = addMonths(dueDate, -item.every);
+  const starts = payPeriods(data, prev, item.every * 3 + 4)
+    .map((p) => p.start)
+    .filter((d) => d >= prev && d < dueDate);
+  const dates = starts.length ? starts : [prev];
+  const amounts = splitEvenly(item.amount, dates.length);
+  return dates.map((date, i) => ({ date, amount: amounts[i]! }));
 }
 
 /** The payday of the paycheck that covers `date` (the start of its pay period). */
@@ -98,24 +182,28 @@ export function outflowsBetween(data: AppData, from: ISODate, to: ISODate): Sche
   const out: ScheduledOutflow[] = [];
   // Payment can land up to a pay period before (or, if recorded, after) the due date, and parts up to
   // a month before it, so look a month either side.
+  // Bills saved for every paycheck can start saving up to a year before they're due.
+  const reach = Math.max(1, ...items.filter((i) => i.saves).map((i) => i.every));
   const { year, month1 } = yearMonth(addMonths(from, -1));
-  const last = addMonths(to, 1);
+  const last = addMonths(to, reach);
   for (let m = makeDate(year, month1, 1); m <= last; m = addMonths(m, 1)) {
     const ym = yearMonth(m);
     for (const i of items) {
+      if (!dueInMonth(i, m)) continue;
       const dueDate = clampedDay(ym.year, ym.month1, i.dueDay);
       const base = { dueDate, itemKind: i.itemKind, itemId: i.itemId, timing: i.timing };
-      if (i.parts) {
-        partDates(data, i.parts, dueDate).forEach((planned, n) => {
+      if (i.saves) {
+        occurrenceParts(data, i, dueDate).forEach((p, n) => {
           const rec = asides.get(`${i.itemKind}:${i.itemId}:${dueDate}:${n}`);
-          const date = rec?.date ?? planned;
+          const date = rec?.date ?? p.date;
           if (date < from || date > to) return;
-          out.push({ ...base, date, name: `${i.name} · set aside`, amount: rec?.amount ?? i.parts![n]!.amount, recorded: !!rec, part: n });
+          out.push({ ...base, date, name: `${i.name} · set aside`, amount: rec?.amount ?? p.amount, recorded: !!rec, part: n });
         });
         continue;
       }
+      if (m > addMonths(to, 1)) continue;
       const rec = records.get(`${i.itemKind}:${i.itemId}:${dueDate}`);
-      const date = rec?.paidOn ?? (i.timing === 'payday' ? covering(dueDate) : dueDate);
+      const date = rec?.paidOn ?? (i.timing === 'payday' && !i.autoTickSince ? covering(dueDate) : dueDate);
       if (date < from || date > to) continue;
       out.push({ ...base, date, name: i.name, amount: rec?.amount ?? i.amount, recorded: !!rec });
     }

@@ -69,12 +69,14 @@ function countWeekday(start: ISODate, end: ISODate, wd: number): number {
 function baseLines(data: AppData, period: PayPeriod): PlanLine[] {
   const lines: PlanLine[] = [];
 
-  // Bills saved for in parts: each part comes out of the paycheck it's set aside from.
+  // Bills saved for in parts (each part comes out of the paycheck it's set aside from),
+  // and bills due every few months (only in the months they're due).
+  const notMonthly = (id: string) => live(data.bills).some((b) => b.id === id && (b.every ?? 1) > 1 && !!b.anchor);
   for (const o of outflowsBetween(data, period.start, period.end))
-    if (o.part !== undefined) lines.push({ kind: o.itemKind, refId: o.itemId, name: o.name, amount: o.amount, dueDate: o.dueDate });
+    if (o.part !== undefined || (o.itemKind === 'bill' && notMonthly(o.itemId))) lines.push({ kind: o.itemKind, refId: o.itemId, name: o.name, amount: o.amount, dueDate: o.dueDate });
 
   for (const b of live(data.bills)) {
-    if (b.parts?.length) continue;
+    if (b.parts?.length || ((b.every ?? 1) > 1 && b.anchor)) continue;
     for (const s of monthlyShare(data, period, b.amount, b.funding, b.dueDay))
       lines.push({ kind: 'bill', refId: b.id, name: b.name, ...s });
   }

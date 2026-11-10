@@ -130,6 +130,15 @@ export interface Bill extends Entity {
    * the whole payment leaves the bucket on the due date. Parts add up to the amount.
    */
   parts?: SavePart[];
+  /** How often it's due, in months (1 = monthly, 3, 6, 12 = yearly). Missing means monthly. */
+  every?: number;
+  /** For bills due less often than monthly: one due date in the cycle (the month and day it falls on). */
+  anchor?: ISODate;
+  /** For bills due less often than monthly: save an even share from every paycheck between due dates. */
+  savePerPaycheck?: boolean;
+  /** Autopay: ticks itself off as paid on its date, starting from autoTickSince. */
+  autoTick?: boolean;
+  autoTickSince?: ISODate;
 }
 
 export type CategoryCadence = 'weekly' | 'per-period' | 'monthly';
@@ -189,6 +198,9 @@ export interface Debt extends Entity {
   paidOn?: PaidOn;
   /** Saved for in parts from paychecks, then paid in one go (see Bill.parts). */
   parts?: SavePart[];
+  /** Autopay: ticks itself off as paid on its date, starting from autoTickSince. */
+  autoTick?: boolean;
+  autoTickSince?: ISODate;
 }
 
 /**
@@ -203,6 +215,10 @@ export interface BillPayment extends Entity {
   amount: Cents | null; // when different from usual
   /** Marked paid for that month on the Bills page. */
   paid?: boolean;
+  /** Ticked off by autopay rather than by hand. */
+  auto?: boolean;
+  /** Autopay was undone for this month: don't tick it again. */
+  autoSkip?: boolean;
 }
 
 /** One part of a bill saved for in parts, marked as set aside into its bucket. */

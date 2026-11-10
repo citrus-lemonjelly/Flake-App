@@ -264,14 +264,15 @@ function WeekBills({ bills }: { bills: ScheduledOutflow[] }) {
               const item = items.find((i) => i.itemId === b.itemId && i.itemKind === b.itemKind);
               if (!item) return null;
               if (b.part !== undefined) {
-                const p = splitStatus(data, item, b.dueDate).parts[b.part];
+                const parts = splitStatus(data, item, b.dueDate).parts;
+                const p = parts[b.part];
                 if (!p) return null;
                 return (
                   <li key={`${b.itemId}${b.dueDate}${b.part}`}>
                     <Tick done={!!p.done} label={p.done ? `Undo ${item.name} set-aside` : `Mark ${item.name} part ${b.part + 1} set aside`} onClick={() => act.toggleSetAside(item, b.dueDate, p)} />
                     <div className="grow">
                       <div style={{ fontWeight: 600 }}>
-                        {item.name} · set aside {b.part + 1} of {item.parts!.length}
+                        {item.name} · set aside{!item.perPaycheck && ` ${b.part + 1} of ${parts.length}`}
                       </div>
                       <div className={`sub ${p.done ? 'good' : ''}`}>
                         {p.done ? 'Set aside' : weekdayDate(b.date)} · for the {shortDate(b.dueDate)} payment

@@ -12,6 +12,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.17.0',
+    date: '2026-11-10',
+    title: 'Bills: autopay, changing amounts, swipe, and yearly bills',
+    items: [
+      'Turn on Autopay for a bill and it ticks itself off on its due date. Next time you open Flake it shows what was ticked off, with Undo on each; an undone bill isn’t ticked again.',
+      'Tap a bill to set this month’s amount, for bills that change, like a higher power bill. It counts everywhere for that month only.',
+      'Swipe a bill to the right to mark it paid (or not paid).',
+      'Bills can repeat every 3, 6 or 12 months, and be saved for with an even share from every paycheck so it’s all there when it’s due.',
+    ],
+  },
+  {
     version: '0.16.0',
     date: '2026-11-10',
     title: 'Sleeker and livelier',
