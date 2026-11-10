@@ -9,7 +9,6 @@ import { Icon } from '../ui/icons';
 import { KIND_LABEL, money, monthOnly, monthYear, shortDate } from '../ui/format';
 import { AssignSheet } from '../sheets/AssignSheet';
 import { DebtSheet, FundSheet } from '../sheets/EditSheets';
-import { LogSheet } from '../sheets/LogSheet';
 import { MilestoneSheet } from '../sheets/MilestoneSheet';
 import { PayoffSheet, STRATEGIES } from '../sheets/PayoffSheet';
 import { DebtTrackSheet, FundTrackSheet, debtOutlook } from '../sheets/TrackSheets';
@@ -65,11 +64,6 @@ export function Progress() {
             {x.sim.debtFreeDate ? `Debt-free est. ${monthYear(x.sim.debtFreeDate)} · ` : ''}
             {money(owed, true)} owed · {money(saved, true)} saved
           </div>
-        </div>
-        <div className="actions">
-          <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
-            + Log spending
-          </button>
         </div>
       </header>
 

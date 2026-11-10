@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addDays, allPaydays, hourlyTakeHome, live, weekRanges, weekSpending } from '../engine';
+import { addDays, allPaydays, byId, hourlyTakeHome, live, weekRanges, weekSpending } from '../engine';
 import { logBonus, logSpending, recordPaycheck } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
@@ -11,16 +11,20 @@ type Kind = 'spending' | 'bonus' | 'hours';
 const MONEY_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫'];
 const HOURS_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 
-/** The "+ Log" buttons: amount pad first, then a category, in three taps. Hourly households can log hours here too. */
-export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
+/**
+ * Log money with an amount pad. Spending is always logged into one bucket,
+ * the one whose + was tapped. Without a bucket it logs a bonus, or hours for hourly pay.
+ */
+export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: string; initial?: 'bonus' | 'hours' }) {
   const data = useData();
   const x = useDerived();
   const update = useUpdate();
   const ui = useUI();
   const hourly = live(data.incomes).filter((s) => s.hourly);
-  const [kind, setKind] = useState<Kind>(initial === 'hours' && !hourly.length ? 'spending' : initial);
+  const [kind, setKind] = useState<Kind>(categoryId ? 'spending' : initial === 'hours' && hourly.length ? 'hours' : 'bonus');
   const [digits, setDigits] = useState('');
-  const [cat, setCat] = useState<string | null>(live(data.categories)[0]?.id ?? null);
+  const bucket = categoryId ? byId(data.categories, categoryId) : undefined;
+  const cat = bucket?.id ?? null;
   const [note, setNote] = useState('');
   const [date, setDate] = useState(x.today);
   const [sourceId, setSourceId] = useState(hourly[0]?.id ?? '');
@@ -73,7 +77,8 @@ export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
     ui.close();
   };
 
-  const title = kind === 'spending' ? 'Log spending' : kind === 'bonus' ? 'Log a bonus' : 'Log hours';
+  const title = kind === 'spending' ? `Log ${bucket?.name ?? 'spending'}` : kind === 'bonus' ? 'Other money in' : 'Log hours';
+  const left = budgets.find((b) => b.c.id === cat)?.left;
   return (
     <Sheet
       title={title}
@@ -84,33 +89,25 @@ export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
         </button>
       }
     >
-      <Segmented
-        label="Type"
-        value={kind}
-        onChange={switchKind}
-        options={[
-          { value: 'spending', label: 'Spending' },
-          { value: 'bonus', label: 'Bonus' },
-          ...(hourly.length ? [{ value: 'hours' as const, label: 'Hours' }] : []),
-        ]}
-      />
+      {kind !== 'spending' && hourly.length > 0 && (
+        <Segmented
+          label="Type"
+          value={kind}
+          onChange={switchKind}
+          options={[
+            { value: 'bonus', label: 'Money in' },
+            { value: 'hours', label: 'Hours' },
+          ]}
+        />
+      )}
       <div className="amount-display" aria-live="polite">
         {kind === 'hours' ? `${digits || '0'} hrs` : money(cents)}
       </div>
 
-      {kind === 'spending' && (
-        <div className="chips">
-          {budgets.map(({ c, left }) => (
-            <button key={c.id} className="chip" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>
-              {c.name}
-              <small>{left >= 0 ? `${money(left, true)} left` : `${money(-left, true)} over`}</small>
-            </button>
-          ))}
-          <button className="chip" aria-pressed={cat === null} onClick={() => setCat(null)}>
-            Other
-            <small>not from a budget</small>
-          </button>
-        </div>
+      {kind === 'spending' && left !== undefined && (
+        <p className="muted" style={{ textAlign: 'center', marginTop: -4 }}>
+          {left - cents >= 0 ? `${money(left - cents)} left in ${bucket!.name} this week` : `${bucket!.name} would be ${money(cents - left)} over this week`}
+        </p>
       )}
 
       {kind === 'hours' && source?.hourly && (
@@ -131,7 +128,7 @@ export function LogSheet({ initial = 'spending' }: { initial?: Kind }) {
 
       {kind !== 'hours' && (
         <div className="field">
-          <input aria-label="Note" placeholder={kind === 'spending' ? 'Note (optional), e.g. Costco' : 'Note, e.g. October commission'} value={note} onChange={(e) => setNote(e.target.value)} />
+          <input aria-label="Note" placeholder={kind === 'spending' ? 'Note (optional), e.g. Costco' : 'Note, e.g. a refund or commission'} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
       <div className="keypad">

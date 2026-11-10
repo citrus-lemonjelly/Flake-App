@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addDays, allPaydays, type Payday } from '../engine';
+import { addDays, allPaydays, live, type Payday } from '../engine';
 import type { Cents } from '../model/types';
 import { recordPaycheck } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
@@ -89,9 +89,16 @@ export function PaySheet() {
           </button>
         </div>
       )}
-      <button className="btn ghost block" onClick={() => ui.open(<LogSheet initial="bonus" />)}>
-        Other money in (bonus, refund…)
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn ghost block" onClick={() => ui.open(<LogSheet initial="bonus" />)}>
+          Other money in
+        </button>
+        {live(data.incomes).some((s) => s.hourly) && (
+          <button className="btn ghost block" onClick={() => ui.open(<LogSheet initial="hours" />)}>
+            Log hours
+          </button>
+        )}
+      </div>
     </Sheet>
   );
 }

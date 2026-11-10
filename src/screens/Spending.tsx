@@ -3,7 +3,7 @@ import { addDays, billItems, billsDue, live, splitStatus, weekRanges, weekSpendi
 import { budgetsToWeekly } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
-import { CategorySheet } from '../sheets/EditSheets';
+import { BUCKET_IDEAS, CategorySheet } from '../sheets/EditSheets';
 import { LogSheet } from '../sheets/LogSheet';
 import { SpendingSheet } from '../sheets/SpendingSheet';
 import { Bar, Empty } from '../ui/components';
@@ -36,17 +36,17 @@ export function Spending() {
       <header className="page-head">
         <div>
           <h1>Spending</h1>
-          <div className="sub">Weekly budgets · weeks start {new Date(`${w.start}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}</div>
+          <div className="sub">Weekly buckets · weeks start {new Date(`${w.start}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}</div>
         </div>
         <div className="actions">
-          <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
-            + Log
+          <button className="btn small" onClick={() => ui.open(<CategorySheet />)}>
+            + New bucket
           </button>
         </div>
       </header>
 
       <ScreenTip id="spending">
-        Each budget is per week. Log purchases as you go and see what's left. Bills that leave the bank this week are listed too, so the whole week is in one place.
+        Each bucket is money for one kind of spending each week. Tap a bucket's <b>+</b> to log a purchase into it, or the bucket itself to see its purchases. Bills that leave the bank this week are listed too, so the whole week is in one place.
       </ScreenTip>
 
       {notWeekly.length > 0 && (
@@ -108,12 +108,7 @@ export function Spending() {
           </div>
 
           <div className="card">
-            <h3>
-              Budgets
-              <button className="link" onClick={() => ui.open(<CategorySheet />)}>
-                + Add
-              </button>
-            </h3>
+            <h3>Buckets</h3>
             {w.byCategory.length ? (
               <ul className="list">
                 {w.byCategory.map(({ category: c, budget, spent }) => {
@@ -136,8 +131,8 @@ export function Spending() {
                           </div>
                         </div>
                       </button>
-                      <button className="icon-btn" aria-label={`Edit ${c.name}`} onClick={() => ui.open(<CategorySheet id={c.id} />)}>
-                        <Icon name="settings" size={16} />
+                      <button className="add-btn" aria-label={`Log ${c.name} spending`} onClick={() => ui.open(<LogSheet categoryId={c.id} />)}>
+                        <Icon name="plus" size={18} stroke={2.4} />
                       </button>
                     </li>
                   );
@@ -146,16 +141,16 @@ export function Spending() {
                   <li>
                     <div className="grow">
                       <div className="row">
-                        <span style={{ fontWeight: 600 }}>Other</span>
+                        <span style={{ fontWeight: 600 }}>Not in a bucket</span>
                         <b style={{ fontSize: 14 }}>{money(w.other)}</b>
                       </div>
-                      <div className="sub">Not from a budget</div>
+                      <div className="sub">Logged before buckets, or from a bucket that was deleted</div>
                     </div>
                   </li>
                 )}
               </ul>
             ) : (
-              <Empty>Add weekly budgets like groceries and gas.</Empty>
+              <BucketIdeas />
             )}
           </div>
         </div>
@@ -166,9 +161,14 @@ export function Spending() {
             <h3>
               {focusName ? `${focusName} purchases` : 'Purchases'}
               {focus && (
-                <button className="link" onClick={() => setFocus(null)}>
-                  Show all
-                </button>
+                <span style={{ display: 'flex', gap: 14 }}>
+                  <button className="link" onClick={() => ui.open(<CategorySheet id={focus} />)}>
+                    Edit bucket
+                  </button>
+                  <button className="link" onClick={() => setFocus(null)}>
+                    Show all
+                  </button>
+                </span>
               )}
             </h3>
             {purchases.length ? (
@@ -188,12 +188,31 @@ export function Spending() {
                 ))}
               </ul>
             ) : (
-              <Empty>{current ? 'Nothing logged this week yet. Tap + Log after a purchase.' : 'Nothing logged this week.'}</Empty>
+              <Empty>{current ? 'Nothing logged this week yet. Tap a bucket’s + after a purchase.' : 'Nothing logged this week.'}</Empty>
             )}
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+/** No buckets yet: one tap starts one from a common idea. */
+function BucketIdeas() {
+  const ui = useUI();
+  return (
+    <div style={{ textAlign: 'center', padding: '6px 0 4px' }}>
+      <p className="muted" style={{ fontSize: 14, marginTop: 0 }}>
+        Make a bucket for each kind of spending you log in a week.
+      </p>
+      <div className="chips">
+        {BUCKET_IDEAS.map((n) => (
+          <button key={n} className="chip" onClick={() => ui.open(<CategorySheet name={n} />)}>
+            + {n}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

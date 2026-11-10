@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.14.0',
+    date: '2026-11-10',
+    title: 'Spending buckets',
+    items: [
+      'Spending is a set of weekly buckets, like Groceries, Gas, Eating out, Clothes or Other. Make one with + New bucket; common ones are a tap away.',
+      'Each bucket has its own + to log a purchase straight into it, on Spending and on Home. The general Log spending button is gone.',
+      'Other money in and hourly hours are logged from Log pay on Home.',
+    ],
+  },
+  {
     version: '0.13.1',
     date: '2026-11-10',
     title: 'Totals on the Bills page',

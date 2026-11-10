@@ -13,6 +13,7 @@ import { confirmStep, guideSteps, setGuide, type GuideStep, type GuideStepId } f
 import { LogSheet } from '../sheets/LogSheet';
 import { PaySheet } from '../sheets/PaySheet';
 import { ScreenTip } from '../ui/ScreenTip';
+import { Icon } from '../ui/icons';
 import { MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
 import { Tick, useBillActions } from '../ui/billActions';
 
@@ -44,7 +45,6 @@ export function basisText(x: Derived, extra: number): string {
 export function Home() {
   const data = useData();
   const x = useDerived();
-  const ui = useUI();
   const name = data.household.people[0] ?? 'there';
   const nextPay = x.nextPaydays[0];
 
@@ -57,11 +57,6 @@ export function Home() {
             {weekdayDate(x.today)}
             {nextPay && ` · next pay ${weekdayShort(nextPay.payday)}`}
           </div>
-        </div>
-        <div className="actions">
-          <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
-            + Log spending
-          </button>
         </div>
       </header>
 
@@ -432,22 +427,27 @@ function ThisWeek() {
           </div>
           <div className="cat-tiles">
             {w.byCategory.map((c) => (
-              <button key={c.category.id} onClick={() => ui.go('spending', { categoryId: c.category.id })}>
-                <b>{c.category.name}</b>
-                <small className={c.spent > c.budget ? 'over' : ''}>
-                  {money(c.spent, true)} of {money(c.budget, true)}
-                  {c.spent > c.budget && ' · over'}
-                </small>
-                <Bar value={c.budget ? c.spent / c.budget : 0} tone={c.spent > c.budget ? 'warn' : undefined} />
-              </button>
+              <div key={c.category.id} className="tile">
+                <button className="tile-main" onClick={() => ui.go('spending', { categoryId: c.category.id })} aria-label={`${c.category.name}: ${money(c.spent)} of ${money(c.budget)} this week`}>
+                  <b>{c.category.name}</b>
+                  <small className={c.spent > c.budget ? 'over' : ''}>
+                    {money(c.spent, true)} of {money(c.budget, true)}
+                    {c.spent > c.budget && ' · over'}
+                  </small>
+                  <Bar value={c.budget ? c.spent / c.budget : 0} tone={c.spent > c.budget ? 'warn' : undefined} />
+                </button>
+                <button className="add-btn" aria-label={`Log ${c.category.name} spending`} onClick={() => ui.open(<LogSheet categoryId={c.category.id} />)}>
+                  <Icon name="plus" size={16} stroke={2.4} />
+                </button>
+              </div>
             ))}
           </div>
         </>
       ) : (
         <div className="empty">
-          No budgets yet.{' '}
+          No spending buckets yet.{' '}
           <button className="link" onClick={() => ui.open(<CategorySheet />)}>
-            Add one
+            Make one
           </button>
         </div>
       )}
