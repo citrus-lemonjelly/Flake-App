@@ -16,6 +16,7 @@ import { HelpTip } from '../ui/ScreenTip';
 import { Icon } from '../ui/icons';
 import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
 import { BalanceSheet } from '../sheets/BalanceSheet';
+import { SendToDebtSheet } from '../sheets/SendToDebtSheet';
 import { Tick, useBillActions } from '../ui/billActions';
 import { SwipeRow } from '../ui/Swipe';
 import { useCountUp } from '../ui/motion';
@@ -211,6 +212,7 @@ function LeftOver() {
     .map((i) => ({ item: i, balance: bucketBalance(data, i) }));
   const share = flow.inTotal > 0 ? Math.min(1, flow.outTotal / flow.inTotal) : 1;
   const left = useCountUp(flow.left);
+  const hasDebt = data.debts.some((d) => !d.deletedAt && (d.balance ?? 0) > 0);
   const inTotal = useCountUp(flow.inTotal);
   const outTotal = useCountUp(flow.outTotal);
   return (
@@ -238,6 +240,12 @@ function LeftOver() {
           <small>{money(flow.outSoFar, true)} out so far</small>
         </div>
       </div>
+      {hasDebt && (
+        <button className="hero-send" onClick={() => ui.open(<SendToDebtSheet />)}>
+          <span>Send left over to a debt</span>
+          <b>›</b>
+        </button>
+      )}
       {buckets.map(({ item, balance }) => (
         <button key={item.itemId} className="hero-bucket" onClick={() => ui.go('bills')}>
           <span>{item.name} bucket</span>
