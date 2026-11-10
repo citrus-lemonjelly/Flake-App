@@ -588,6 +588,12 @@ export function CategorySheet({ id, name: startName }: { id?: string; name?: str
       )}
       <TextField label="Name" value={c.name} onChange={(name) => set({ name })} placeholder="e.g. Groceries" />
       <MoneyField label="Per week" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} hint={`What you usually spend, or could spend, each week. Weeks start on ${WEEKDAYS[data.household.weekStartsOn]}.`} />
+      <Toggle
+        label="Roll over what's left"
+        hint="Money not spent this week carries into next week; spending over comes out of next week. Good for clothes or gifts; leave it off for groceries."
+        checked={!!c.rollover}
+        onChange={(rollover) => set({ rollover, rolloverSince: rollover ? (c.rolloverSince ?? today()) : c.rolloverSince })}
+      />
     </EditFrame>
   );
 }

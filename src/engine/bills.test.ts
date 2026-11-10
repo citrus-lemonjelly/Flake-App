@@ -5,7 +5,7 @@ import { autoTickBills, budgetsToWeekly, logSpending, markBillPaid, setAsidePart
 import type { DebtPayment } from '../model/types';
 import { billItems, dueDatesIn, outflowsBetween, partDates } from './outflows';
 import { autoTickDue, billsDue, bucketBalance, savingFor, splitStatus } from './bills';
-import { balanceForecast, monthFlow, weekSpending, weeklyAmount } from './flow';
+import { balanceForecast, carriedIn, monthFlow, recentPurchases, weekSpending, weeklyAmount } from './flow';
 import { weekRanges } from './budget';
 
 /** Paid on the 15th and the last day; the house is saved for in two halves and paid on the 1st. */
@@ -241,5 +241,39 @@ describe("this month's amount", () => {
     expect(billsDue(d, '2026-11-01', '2026-11-30').find((o) => o.item.name === 'Phone')!.amount).toBe(9_500);
     d = setBillAmount(d, p, null);
     expect(billsDue(d, '2026-11-01', '2026-11-30').find((o) => o.item.name === 'Phone')).toMatchObject({ amount: 8_000, changed: false });
+  });
+});
+
+describe('buckets that roll over', () => {
+  it('carries what was left (or overspent) into the next week', () => {
+    let d = household(); // $140 groceries a week; weeks start Friday
+    d.categories[0] = { ...d.categories[0]!, rollover: true, rolloverSince: '2026-10-30' };
+    const g = d.categories[0]!.id;
+    d = logSpending(d, { date: '2026-10-31', amount: 10_000, categoryId: g }); // week of Oct 30: $40 left
+    d = logSpending(d, { date: '2026-11-07', amount: 20_000, categoryId: g }); // week of Nov 6: $140 + $40 − $200 = −$20
+    expect(carriedIn(d, d.categories[0]!, '2026-11-06')).toBe(4_000);
+    expect(carriedIn(d, d.categories[0]!, '2026-11-13')).toBe(-2_000);
+    const [w] = weekRanges(d, '2026-11-13', 1);
+    expect(weekSpending(d, w!).byCategory[0]).toMatchObject({ weekly: 14_000, carried: -2_000, budget: 12_000 });
+  });
+
+  it('carries nothing for a bucket that does not roll over', () => {
+    let d = household();
+    d = logSpending(d, { date: '2026-10-31', amount: 10_000, categoryId: d.categories[0]!.id });
+    expect(carriedIn(d, d.categories[0]!, '2026-11-06')).toBe(0);
+  });
+});
+
+describe('recent purchases', () => {
+  it('lists the last few different purchases in a bucket', () => {
+    let d = household();
+    const g = d.categories[0]!.id;
+    for (const [date, amount, note] of [['2026-11-01', 4_100, 'Shell'], ['2026-11-03', 6_000, 'Costco'], ['2026-11-05', 4_500, 'shell'], ['2026-11-06', 2_000, '']] as const)
+      d = logSpending(d, { date, amount, categoryId: g, note });
+    expect(recentPurchases(d, g)).toEqual([
+      { note: '', amount: 2_000 },
+      { note: 'shell', amount: 4_500 }, // one Shell chip, with its latest amount
+      { note: 'Costco', amount: 6_000 },
+    ]);
   });
 });

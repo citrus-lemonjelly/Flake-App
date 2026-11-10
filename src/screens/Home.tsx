@@ -71,6 +71,7 @@ export function Home() {
       <div className="home-grid">
         <div className="stack">
           <GettingStarted />
+          <WeekReview />
           <LeftOver />
           <BalanceCard />
           <FlowCard />
@@ -497,6 +498,76 @@ function DueSoon() {
         </ul>
       ) : (
         <div className="empty">Nothing due in the next two weeks.</div>
+      )}
+    </div>
+  );
+}
+
+const REVIEW_KEY = 'flake.review.';
+
+/** At the start of each week: how last week's spending went, bucket by bucket. Shown until dismissed. */
+function WeekReview() {
+  const data = useData();
+  const x = useDerived();
+  const [dismissed, setDismissed] = useState(false);
+  const [thisWeek] = weekRanges(data, x.today, 1);
+  const [last] = weekRanges(data, addDays(thisWeek!.start, -7), 1);
+  const key = REVIEW_KEY + last!.start;
+  const seen = (() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  })();
+  const early = x.today <= addDays(thisWeek!.start, 2);
+  const w = useMemo(() => weekSpending(data, last!, false), [data, last!.start]);
+  if (dismissed || seen || !early || !w.byCategory.length || (w.spent === 0 && !w.purchases.length)) return null;
+  const hide = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(key, '1');
+    } catch {
+      /* not remembered */
+    }
+  };
+  const diff = w.budget - w.spent;
+  const rows = w.byCategory
+    .map((c) => ({ name: c.category.name, d: c.budget - c.spent, rolls: !!c.category.rollover }))
+    .filter((r) => r.d !== 0)
+    .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
+    .slice(0, 4);
+  return (
+    <div className="card review">
+      <h3>
+        Last week
+        <button className="link" onClick={hide}>
+          Got it
+        </button>
+      </h3>
+      <div className="muted" style={{ fontSize: 13, marginTop: -6 }}>
+        {shortDate(w.start)} – {shortDate(w.end)}
+      </div>
+      <div className="row" style={{ alignItems: 'baseline', margin: '6px 0 8px' }}>
+        <span>
+          <span className="num" style={{ fontSize: 22 }}>{money(w.spent)}</span> <span className="muted" style={{ fontSize: 13 }}>of {money(w.budget, true)}</span>
+        </span>
+        <b className={diff < 0 ? 'over' : 'good-text'} style={{ fontSize: 14 }}>
+          {diff >= 0 ? `${money(diff)} under 🎉` : `${money(-diff)} over`}
+        </b>
+      </div>
+      {rows.length > 0 && (
+        <ul className="list">
+          {rows.map((r) => (
+            <li key={r.name} style={{ padding: '7px 0' }}>
+              <span className="grow">{r.name}</span>
+              <span className={r.d < 0 ? 'over' : 'good-text'} style={{ fontSize: 13.5, fontWeight: 600 }}>
+                {r.d < 0 ? `▲ ${money(-r.d)} over` : `${money(r.d)} under`}
+                {r.rolls && <span className="faint" style={{ fontWeight: 400 }}> · {r.d < 0 ? 'comes out of' : 'rolls into'} this week</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

@@ -12,6 +12,20 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.18.0',
+    date: '2026-11-10',
+    title: 'Spending: recent amounts, rollover, trends and who logged it',
+    items: [
+      'A bucket’s + shows your recent purchases (like Shell $38.40) to log again in a tap.',
+      'Update your bank balance and if it’s lower than Flake expected, you can log the difference into a bucket, so the week stays right.',
+      'Turn on Roll over for a bucket and what’s left carries into next week (overspending comes out of it). Good for clothes or gifts.',
+      'Each bucket shows its last eight weeks as tiny bars and its average.',
+      'Swipe a purchase right to edit it, left to delete it (with Undo).',
+      'Purchases say who logged them, and the week shows each person’s total. Each phone remembers who uses it.',
+      'At the start of each week, Home shows how last week went, bucket by bucket.',
+    ],
+  },
+  {
     version: '0.17.0',
     date: '2026-11-10',
     title: 'Bills: autopay, changing amounts, swipe, and yearly bills',

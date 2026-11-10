@@ -149,6 +149,9 @@ export interface Category extends Entity {
   amount: Cents;
   cadence: CategoryCadence;
   icon?: string;
+  /** What's left at the end of a week carries into the next (overspending comes out of it), from rolloverSince. */
+  rollover?: boolean;
+  rolloverSince?: ISODate;
 }
 
 export interface Spending extends Entity {
@@ -158,6 +161,8 @@ export interface Spending extends Entity {
   note: string;
   /** Worked out at a check-in rather than logged; counts against the budgets as a whole. */
   inferred?: boolean;
+  /** Who logged it (a name from the household). */
+  by?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -93,8 +93,9 @@ export function eraseAll(data: AppData): AppData {
   return next;
 }
 
-export function logSpending(data: AppData, s: { date: ISODate; amount: Cents; categoryId: Id | null; note?: string; inferred?: boolean }): AppData {
-  return upsert(data, 'spending', entity({ ...s, note: s.note ?? '' }));
+export function logSpending(data: AppData, s: { date: ISODate; amount: Cents; categoryId: Id | null; note?: string; inferred?: boolean; by?: string }): AppData {
+  const { by, ...rest } = s;
+  return upsert(data, 'spending', entity({ ...rest, note: s.note ?? '', ...(by && { by }) }));
 }
 
 export function logBonus(data: AppData, b: { date: ISODate; amount: Cents; sourceId?: Id | null; note?: string }): AppData {
