@@ -60,7 +60,7 @@ export function Progress() {
     <>
       <header className="page-head">
         <div>
-          <h1>Progress</h1>
+          <h1>Debt &amp; goals</h1>
           <div className="sub">
             {x.sim.debtFreeDate ? `Debt-free est. ${monthYear(x.sim.debtFreeDate)} · ` : ''}
             {money(owed, true)} owed · {money(saved, true)} saved

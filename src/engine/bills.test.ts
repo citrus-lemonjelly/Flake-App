@@ -1,0 +1,130 @@
+import { describe, expect, it } from 'vitest';
+import { emptyData, entity } from '../model/factory';
+import type { AppData, Bill, Category, IncomeSource } from '../model/types';
+import { budgetsToWeekly, logSpending, markBillPaid, setAsidePart, updateSettings } from '../store/actions';
+import { billItems, outflowsBetween, partDates } from './outflows';
+import { billsDue, bucketBalance, savingFor, splitStatus } from './bills';
+import { monthFlow, weekSpending, weeklyAmount } from './flow';
+import { weekRanges } from './budget';
+
+/** Paid on the 15th and the last day; the house is saved for in two halves and paid on the 1st. */
+function household(): AppData {
+  const data: AppData = {
+    ...emptyData(),
+    household: { name: 'T', people: [], weekStartsOn: 5 },
+    incomes: [
+      entity<IncomeSource>({ name: 'Pay', owner: 'A', amount: 300_000, schedule: { kind: 'semimonthly', days: [15, 31] }, adjust: 'previousBusinessDay', earlyDepositDays: 0, anchorsPayPeriod: true }),
+    ],
+    bills: [
+      entity<Bill>({ name: 'House', amount: 200_000, dueDay: 1, funding: 'due-date', owner: 'A', autopay: true, parts: [{ day: 15, amount: 110_000 }, { day: 31, amount: 90_000 }] }),
+      entity<Bill>({ name: 'Phone', amount: 8_000, dueDay: 20, funding: 'due-date', owner: 'A', autopay: false }),
+    ],
+    categories: [entity<Category>({ name: 'Groceries', amount: 14_000, cadence: 'weekly' })],
+  };
+  return updateSettings(data, { billTiming: 'payday' });
+}
+const house = (d: AppData) => billItems(d).find((i) => i.name === 'House')!;
+
+describe('bills saved for in parts', () => {
+  it('sets each part aside on the payday before the due date', () => {
+    const d = household();
+    // Nov 15 2026 is a Sunday, so that paycheck lands Friday the 13th; the 31st clamps to the 30th.
+    expect(partDates(d, house(d).parts!, '2026-12-01')).toEqual(['2026-11-13', '2026-11-30']);
+  });
+
+  it('leaves the paycheck as its parts, not as one payment', () => {
+    const out = outflowsBetween(household(), '2026-11-01', '2026-11-30');
+    expect(out.map((o) => [o.name, o.date, o.amount])).toEqual([
+      ['House · set aside', '2026-11-13', 110_000],
+      ['Phone', '2026-11-13', 8_000],
+      ['House · set aside', '2026-11-30', 90_000],
+    ]);
+  });
+
+  it('saves in November for the December 1 payment', () => {
+    const d = household();
+    expect(savingFor(d, house(d), '2026-11-01')).toBe('2026-12-01');
+  });
+
+  it('tracks parts set aside, the payment, and what sits in the bucket', () => {
+    let d = household();
+    const p = { itemKind: 'bill' as const, itemId: house(d).itemId, dueDate: '2026-12-01' };
+    d = setAsidePart(d, { ...p, part: 0, date: '2026-11-13', amount: 110_000 }, true);
+    d = setAsidePart(d, { ...p, part: 0, date: '2026-11-13', amount: 110_000 }, true); // no duplicates
+    expect(splitStatus(d, house(d), '2026-12-01')).toMatchObject({ saved: 110_000, total: 200_000, paid: false });
+    d = setAsidePart(d, { ...p, part: 1, date: '2026-11-30', amount: 90_000 }, true);
+    expect(bucketBalance(d, house(d))).toBe(200_000);
+    d = markBillPaid(d, { ...p, planned: '2026-12-01', today: '2026-12-01' }, true);
+    expect(splitStatus(d, house(d), '2026-12-01').paid).toBe(true);
+    expect(bucketBalance(d, house(d))).toBe(0);
+    d = setAsidePart(d, { ...p, part: 1, date: '2026-11-30', amount: 90_000 }, false);
+    expect(splitStatus(d, house(d), '2026-12-01').saved).toBe(110_000);
+  });
+});
+
+describe('marking bills paid', () => {
+  it('marks a month paid, and only that month', () => {
+    let d = household();
+    const phone = billItems(d).find((i) => i.name === 'Phone')!;
+    d = markBillPaid(d, { itemKind: 'bill', itemId: phone.itemId, dueDate: '2026-11-20', planned: '2026-11-13', today: '2026-11-13' }, true);
+    expect(billsDue(d, '2026-11-01', '2026-11-30').find((b) => b.item.name === 'Phone')).toMatchObject({ paid: true, payDate: '2026-11-13' });
+    expect(billsDue(d, '2026-12-01', '2026-12-31').find((b) => b.item.name === 'Phone')!.paid).toBe(false);
+    d = markBillPaid(d, { itemKind: 'bill', itemId: phone.itemId, dueDate: '2026-11-20', planned: '2026-11-13', today: '2026-11-13' }, false);
+    expect(billsDue(d, '2026-11-01', '2026-11-30').find((b) => b.item.name === 'Phone')!.paid).toBe(false);
+  });
+
+  it('paid early is dated the day it was paid', () => {
+    let d = household();
+    const phone = billItems(d).find((i) => i.name === 'Phone')!;
+    d = markBillPaid(d, { itemKind: 'bill', itemId: phone.itemId, dueDate: '2026-11-20', planned: '2026-11-13', today: '2026-11-10' }, true);
+    expect(outflowsBetween(d, '2026-11-01', '2026-11-30').find((o) => o.name === 'Phone')!.date).toBe('2026-11-10');
+  });
+
+  it('a bill paid in parts is paid on its due date, from the bucket', () => {
+    const d = household();
+    expect(billsDue(d, '2026-11-01', '2026-11-30').find((b) => b.item.name === 'House')!.payDate).toBe('2026-11-01');
+  });
+});
+
+describe('money in against money out', () => {
+  it('counts paychecks in, and bills, set-asides and spending out', () => {
+    let d = household();
+    d = logSpending(d, { date: '2026-11-07', amount: 6_000, categoryId: d.categories[0]!.id });
+    const f = monthFlow(d, '2026-11-01', '2026-11-30'); // the whole month has happened
+    expect(f.inTotal).toBe(600_000);
+    expect(f.bills).toBe(208_000);
+    expect(f.spending).toBe(6_000);
+    expect(f.left).toBe(600_000 - 208_000 - 6_000);
+  });
+
+  it('plans the rest of the weekly budget for the days still to come', () => {
+    let d = household();
+    // Weeks start Friday: Nov 6–12. $60 of the $140 spent by Tuesday the 10th.
+    d = logSpending(d, { date: '2026-11-07', amount: 6_000, categoryId: d.categories[0]!.id });
+    const f = monthFlow(d, '2026-11-01', '2026-11-10');
+    const rest = f.days.filter((x) => x.date > '2026-11-10' && x.date <= '2026-11-12');
+    expect(rest.map((x) => x.out)).toEqual([4_000, 4_000]); // the $80 left, over Wednesday and Thursday
+    expect(f.inSoFar).toBe(0);
+    expect(f.outSoFar).toBe(6_000);
+  });
+
+  it('weekly spending lists the week’s purchases and the bills leaving that week', () => {
+    let d = household();
+    d = logSpending(d, { date: '2026-11-07', amount: 6_000, categoryId: d.categories[0]!.id });
+    const [week] = weekRanges(d, '2026-11-13', 1);
+    const w = weekSpending(d, week!);
+    expect(w).toMatchObject({ start: '2026-11-13', end: '2026-11-19', spent: 0, budget: 14_000 });
+    expect(w.bills.map((b) => b.name)).toEqual(['House · set aside', 'Phone']);
+  });
+});
+
+describe('weekly budgets', () => {
+  it('converts per-paycheck and monthly budgets to the same money per week', () => {
+    let d = household();
+    d.categories.push(entity<Category>({ name: 'Fun', amount: 15_000, cadence: 'per-period' }), entity<Category>({ name: 'Gifts', amount: 52_000, cadence: 'monthly' }));
+    expect(weeklyAmount(d, d.categories[1]!)).toBe(Math.round((15_000 * 24 * 7) / 365.25));
+    d = budgetsToWeekly(d);
+    expect(d.categories.map((c) => c.cadence)).toEqual(['weekly', 'weekly', 'weekly']);
+    expect(d.categories[2]!.amount).toBe(Math.round((52_000 * 12 * 7) / 365.25));
+  });
+});

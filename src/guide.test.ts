@@ -13,8 +13,7 @@ describe('setup guide', () => {
 
   it('ticks steps off from the data', () => {
     const steps = guideSteps(sampleData(), false);
-    expect(done(steps)).toEqual(expect.arrayContaining(['names', 'paychecks', 'bills', 'budgets', 'debts', 'keep', 'checkin']));
-    expect(done(steps)).not.toContain('timing'); // still the default, never chosen
+    expect(done(steps)).toEqual(expect.arrayContaining(['names', 'paychecks', 'timing', 'bills', 'budgets', 'debts'])); // the demo pays bills on payday
     expect(done(guideSteps(sampleData(), true))).toContain('sync');
   });
 

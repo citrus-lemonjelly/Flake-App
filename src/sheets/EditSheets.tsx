@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { byId, expectedPay, hourlyTakeHome, paycheckRecord, today } from '../engine';
+import { byId, debtMonthlyPayment, weeklyAmount, expectedPay, hourlyTakeHome, live, paycheckRecord, splitEvenly, today } from '../engine';
 import { entity } from '../model/factory';
-import type { Bill, Category, Cents, Debt, DebtKind, Fund, HourlyPay, IncomeSource, PaidOn, PaySchedule } from '../model/types';
+import type { AppData, Bill, Category, Cents, Debt, DebtKind, Fund, HourlyPay, IncomeSource, PaidOn, PaySchedule, SavePart } from '../model/types';
 import { logDebtPayment, recordPaycheck, setDebtBalance, upsert } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
@@ -88,6 +88,7 @@ export function DebtSheet({ id }: { id?: string }) {
   );
   const minKind: MinKind = d.minPayment?.type ?? 'unknown';
   const isMortgage = d.kind === 'mortgage';
+  const monthly = debtMonthlyPayment({ ...d, balance: d.balance === 0 ? null : d.balance });
 
   const save = () =>
     update((data) => {
@@ -101,7 +102,7 @@ export function DebtSheet({ id }: { id?: string }) {
     });
 
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a debt'} canSave={d.name.trim() !== ''} onSave={save} onDelete={existing ? () => removeWithUndo('debts', existing.id, existing.name) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a debt'} canSave={d.name.trim() !== '' && partsOk(d.parts, monthly) && (!d.parts || d.dueDay !== null)} onSave={save} onDelete={existing ? () => removeWithUndo('debts', existing.id, existing.name) : undefined}>
       <div className="form-grid">
         <div className="full">
           <TextField label="Name" value={d.name} onChange={(name) => set({ name })} placeholder="e.g. Chase Visa" />
@@ -175,7 +176,9 @@ export function DebtSheet({ id }: { id?: string }) {
           )}
         </>
       )}
-      <TimingField value={d.paidOn} onChange={(paidOn) => set({ paidOn })} />
+      <PartsField total={monthly} parts={d.parts} onChange={(parts) => set({ parts })} what={isMortgage ? 'the payment' : 'it'} />
+      {d.parts && d.dueDay === null && <p className="over" style={{ fontSize: 13, marginTop: -6 }}>Pick a due day so Flake knows which month each part saves for.</p>}
+      {!d.parts && <TimingField value={d.paidOn} onChange={(paidOn) => set({ paidOn })} />}
       <Toggle label="Include in the payoff plan" hint={isMortgage ? 'Usually off: extra money goes to higher-rate debts first.' : 'Extra money from the pot can go here.'} checked={d.includeInPlan} onChange={(includeInPlan) => set({ includeInPlan })} />
     </EditFrame>
   );
@@ -231,7 +234,7 @@ export function BillSheet({ id }: { id?: string }) {
   const existing = id ? byId(data.bills, id) : undefined;
   const [b, set] = useDraft<Bill>(() => existing ?? entity<Bill>({ name: '', amount: 0, dueDay: 1, funding: 'due-date', owner: 'joint', autopay: true }));
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a bill'} canSave={b.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'bills', b))} onDelete={existing ? () => removeWithUndo('bills', existing.id, existing.name) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a bill'} canSave={b.name.trim() !== '' && partsOk(b.parts, b.amount)} onSave={() => update((d) => upsert(d, 'bills', b))} onDelete={existing ? () => removeWithUndo('bills', existing.id, existing.name) : undefined}>
       <div className="form-grid">
         <div className="full">
           <TextField label="Name" value={b.name} onChange={(name) => set({ name })} placeholder="e.g. Power" />
@@ -249,8 +252,79 @@ export function BillSheet({ id }: { id?: string }) {
         />
         <SelectField label="Whose" value={b.owner} options={owners} onChange={(owner) => set({ owner })} />
       </div>
-      <TimingField value={b.paidOn} onChange={(paidOn) => set({ paidOn, autopay: paidOn === 'due-date' })} />
+      <PartsField total={b.amount} parts={b.parts} onChange={(parts) => set({ parts })} what="it" />
+      {!b.parts && <TimingField value={b.paidOn} onChange={(paidOn) => set({ paidOn, autopay: paidOn === 'due-date' })} />}
     </EditFrame>
+  );
+}
+
+const partsOk = (parts: SavePart[] | undefined, total: Cents) => !parts || parts.reduce((s, p) => s + p.amount, 0) === total;
+
+/** Paydays on fixed days of the month (the 15th and the last day), to offer as part days. */
+function paydayDays(data: AppData): number[] {
+  const days = live(data.incomes).flatMap((s) => (s.schedule.kind === 'semimonthly' ? s.schedule.days : s.schedule.kind === 'monthly' ? [s.schedule.day] : []));
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
+/**
+ * Save for a bill in parts: set aside from two (or more) paychecks into a bucket,
+ * then pay it in one go on the due date. The parts must add up to the payment.
+ */
+function PartsField({ total, parts, onChange, what }: { total: Cents; parts: SavePart[] | undefined; onChange: (p: SavePart[] | undefined) => void; what: string }) {
+  const data = useData();
+  const paydays = paydayDays(data);
+  const sum = (parts ?? []).reduce((s, p) => s + p.amount, 0);
+  const diff = total - sum;
+  const even = (n: number, days: number[]) => splitEvenly(total, n).map((amount, i) => ({ day: days[i] ?? 15, amount }));
+  const options = dayOptions.map((o) => (paydays.includes(Number(o.value)) ? { ...o, label: `${o.label} · payday` } : o));
+  const defaultDays = paydays.length >= 2 ? paydays.slice(0, 2) : [15, 31];
+  return (
+    <>
+      <Toggle
+        label="Save for it in parts"
+        hint={`Set money aside from paychecks into a bucket, then pay ${what} in one go on the due date.`}
+        checked={!!parts}
+        onChange={(on) => onChange(on ? even(2, defaultDays) : undefined)}
+      />
+      {parts && (
+        <div className="def-block">
+          {parts.map((p, i) => (
+            <div key={i} className="form-grid parts-row">
+              <SelectField
+                label={`Part ${i + 1} · set aside on the`}
+                value={String(p.day)}
+                options={options}
+                onChange={(v) => onChange(parts.map((x, k) => (k === i ? { ...x, day: Number(v) } : x)))}
+              />
+              <MoneyField label="Amount" value={p.amount} onChange={(amount) => onChange(parts.map((x, k) => (k === i ? { ...x, amount: amount ?? 0 } : x)))} />
+            </div>
+          ))}
+          <div className={`parts-check ${diff === 0 ? 'ok' : ''}`}>
+            <span>{diff === 0 ? `Parts add up to ${money(total)} ✓` : diff > 0 ? `${money(diff)} short of ${money(total)}` : `${money(-diff)} more than ${money(total)}`}</span>
+            <button className="link" onClick={() => onChange(even(parts.length, parts.map((p) => p.day)))}>
+              Split evenly
+            </button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            {parts.length < 4 ? (
+              <button className="link" onClick={() => onChange(even(parts.length + 1, [...parts.map((p) => p.day), 1]))}>
+                + Add a part
+              </button>
+            ) : (
+              <span />
+            )}
+            {parts.length > 1 && (
+              <button className="link" style={{ color: 'var(--ink2)' }} onClick={() => onChange(even(parts.length - 1, parts.map((p) => p.day)))}>
+                Remove the last part
+              </button>
+            )}
+          </div>
+          <p className="faint" style={{ fontSize: 12, margin: '10px 0 0' }}>
+            Each part comes out of the paycheck that lands on (or just before) that day, in the month before the payment is due.
+          </p>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -455,24 +529,12 @@ export function CategorySheet({ id }: { id?: string }) {
   const removeWithUndo = useRemoveWithUndo();
   const update = useUpdate();
   const existing = id ? byId(data.categories, id) : undefined;
-  const [c, set] = useDraft<Category>(() => existing ?? entity<Category>({ name: '', amount: 0, cadence: 'weekly' }));
+  // Budgets are weekly; an older per-paycheck or monthly one is converted when it's saved.
+  const [c, set] = useDraft<Category>(() => (existing ? { ...existing, cadence: 'weekly', amount: weeklyAmount(data, existing) } : entity<Category>({ name: '', amount: 0, cadence: 'weekly' })));
   return (
     <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a spending budget'} canSave={c.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'categories', c))} onDelete={existing ? () => removeWithUndo('categories', existing.id, existing.name) : undefined}>
       <TextField label="Name" value={c.name} onChange={(name) => set({ name })} placeholder="e.g. Groceries" />
-      <div className="form-grid">
-        <MoneyField label="Amount" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} />
-        <SelectField
-          label="Every"
-          value={c.cadence}
-          options={[
-            { value: 'weekly', label: 'Week' },
-            { value: 'per-period', label: 'Paycheck' },
-            { value: 'monthly', label: 'Month' },
-          ]}
-          onChange={(cadence) => set({ cadence })}
-        />
-      </div>
-      {c.cadence === 'weekly' && <p className="faint" style={{ fontSize: 13 }}>Counted on {WEEKDAYS[data.household.weekStartsOn]}s, so a paycheck with three of them gets three weeks of budget.</p>}
+      <MoneyField label="Per week" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} hint={`Weeks start on ${WEEKDAYS[data.household.weekStartsOn]}. Change that in Settings.`} />
     </EditFrame>
   );
 }

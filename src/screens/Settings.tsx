@@ -6,7 +6,7 @@ import { exportJson, importJson } from '../store/storage';
 import { eraseAll, replaceEverything, updateHousehold, updateSettings } from '../store/actions';
 import { useData, useStore, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
-import { MoneyField, NumberField, SelectField, Segmented, TextField, Toggle } from '../ui/components';
+import { NumberField, SelectField, Segmented, TextField } from '../ui/components';
 import { WEEKDAYS, money, ordinal } from '../ui/format';
 import { PALETTES } from '../theme/palettes';
 import { BillSheet, CategorySheet, IncomeSheet } from '../sheets/EditSheets';
@@ -89,9 +89,6 @@ export function Settings() {
                 ]}
               />
             </div>
-            <div style={{ marginTop: 10 }}>
-              <Toggle label="Show the debt-free estimate on Home" hint="Turn off to keep Home to cash and bills. Progress still shows it." checked={data.settings.showDebtOnHome} onChange={(showDebtOnHome) => set({ showDebtOnHome })} />
-            </div>
           </div>
 
           <div className="card">
@@ -108,11 +105,10 @@ export function Settings() {
                   { value: 'due-date', label: 'On the due date' },
                 ]}
               />
-              <div className="hint">Bills on autopay can be set to their due date one by one (Bills → tap a bill).</div>
+              <div className="hint">Bills on autopay can be set to their due date one by one (Bills → tap a bill). Bills on the Bills page are grouped by this.</div>
             </div>
             <div className="form-grid">
               <SelectField label="Weekly budgets reset on" value={String(data.household.weekStartsOn)} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} onChange={(v) => setHousehold({ weekStartsOn: Number(v) })} />
-              <MoneyField label="Always keep in the bank" hint="This much stays in checking and is never counted as safe to spend." value={data.settings.cashBuffer} onChange={(c) => set({ cashBuffer: c ?? 0 })} />
               <NumberField label="Assumed card rate" hint="Used until a card's real rate is entered." value={data.settings.assumedApr['credit-card'] ?? 24} suffix="%" min={0} max={100} onChange={(v) => set({ assumedApr: { ...data.settings.assumedApr, 'credit-card': v ?? 24 } })} />
             </div>
           </div>
@@ -225,7 +221,7 @@ export function Settings() {
             rows={live(data.bills)
               .sort((a, b) => a.dueDay - b.dueDay)
               .map((b) => ({ id: b.id, name: b.name, sub: `Due the ${ordinal(b.dueDay)}${b.funding === 'split' ? ' · split' : ''}${b.paidOn === 'due-date' && data.settings.billTiming === 'payday' ? ' · autopay' : b.paidOn === 'payday' && data.settings.billTiming === 'due-date' ? ' · paid on payday' : ''}`, amount: money(b.amount), open: () => ui.open(<BillSheet id={b.id} />) }))}
-            empty="Utilities, phone, insurance… Debt payments live under Progress."
+            empty="Utilities, phone, insurance… Card and loan payments live under Debt & goals."
           />
           <ListCard
             title="Spending budgets"

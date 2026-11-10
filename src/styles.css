@@ -27,6 +27,9 @@
   --bad: #c42b2b;
   --shadow: 0 2px 6px color-mix(in oklab, var(--accent) 8%, transparent), 0 12px 32px color-mix(in oklab, var(--accent) 9%, transparent);
   --sheet-shadow: 0 -10px 40px rgba(0, 0, 0, 0.18);
+  /* Money in / money out: fixed so they stay apart in every color scheme. */
+  --flow-in: #2563eb;
+  --flow-out: #d9640a;
 }
 
 :root[data-mode='dark'] {
@@ -45,6 +48,8 @@
   --bad: #ff7a7a;
   --shadow: none;
   --sheet-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  --flow-in: #5b9bff;
+  --flow-out: #f0913a;
 }
 
 * { box-sizing: border-box; }
@@ -429,3 +434,90 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .recent { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .card > .recent:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .ms-line.in-card { background: none; padding: 12px 0 0; margin-top: 12px; border-top: 1px solid var(--line); color: inherit; font: inherit; font-size: 14px; }
+
+/* ---------- Home: left over, money flow ---------- */
+.hero .top .btn.small { padding: 7px 12px; }
+.hero .big.neg { color: #ffe1d6; }
+.hero-split { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.28); margin: 16px 0 12px; overflow: hidden; }
+.hero-split > i { display: block; height: 100%; background: #fff; border-radius: 6px; }
+.hero-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hero-tiles > div { background: rgba(255, 255, 255, 0.14); border-radius: 14px; padding: 10px 12px; }
+.hero-tiles span, .hero-tiles small { display: block; font-size: 12px; opacity: 0.9; }
+.hero-tiles b { display: block; font-family: var(--font-display); font-size: 20px; }
+.hero-bucket { all: unset; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.14); font-size: 13px; }
+.hero-bucket:focus-visible { outline: 2px solid #fff; }
+.mini-seg { display: inline-flex; gap: 2px; background: var(--surface2); border-radius: 10px; padding: 3px; }
+.mini-seg button { border: 0; background: none; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--ink2); min-height: 32px; }
+.mini-seg button[aria-pressed='true'] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.flow-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink2); margin-top: -4px; }
+.flow-key span { display: inline-flex; align-items: center; gap: 5px; }
+.flow-key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.k-in { background: var(--flow-in); }
+.k-out { background: var(--flow-out); }
+.flow-readout { font-size: 13px; color: var(--ink2); min-height: 40px; margin: 8px 0 6px; }
+.flow-readout b { color: var(--ink); font-weight: 600; }
+.mbars { position: relative; height: 150px; margin-top: 6px; }
+.mbars-grid > div { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
+.mbars-grid > div:last-child { border-top-style: solid; }
+.mbars-grid span { position: absolute; right: 0; top: -8px; font-size: 11px; color: var(--ink3); background: var(--surface); padding-left: 4px; }
+.mbars-cols { position: absolute; inset: 0 36px 0 0; display: flex; justify-content: space-around; }
+.mbar { border: 0; background: none; border-radius: 10px; padding: 0 4px; height: 150px; min-width: 40px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; color: var(--ink2); }
+.mbar.on { background: var(--surface2); color: var(--ink); }
+.mbar .pair { display: flex; align-items: flex-end; gap: 2px; }
+.mbar .pair i { width: 13px; border-radius: 4px 4px 0 0; display: block; }
+.mbar .pair .in { background: var(--flow-in); }
+.mbar .pair .out { background: var(--flow-out); }
+.mbar.planned .pair i { opacity: 0.5; }
+.mbar .lbl { font-size: 11px; height: 18px; font-weight: 500; }
+.mbar.on .lbl { font-weight: 700; }
+
+/* ---------- Ticking bills off ---------- */
+.tick { width: 44px; height: 44px; margin: -6px; border: 0; background: none; padding: 0; display: grid; place-items: center; flex: none; }
+.tick > span { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ink3) 70%, transparent); display: grid; place-items: center; color: #fff; transition: background 0.15s; }
+.tick.done > span { background: var(--accent); box-shadow: none; }
+.tick:hover > span { box-shadow: inset 0 0 0 2px var(--accent); }
+.tick.done:hover > span { box-shadow: none; filter: brightness(1.08); }
+.list .sub.soon, .sub.soon { color: var(--warn); }
+.list .sub.good, .sub.good { color: var(--good); }
+.over { color: var(--bad); }
+.cat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cat-tiles button { border: 0; text-align: left; background: var(--surface2); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.cat-tiles b { font-size: 13px; font-weight: 600; }
+.cat-tiles small { font-size: 12px; color: var(--ink2); margin-bottom: 6px; }
+.cat-tiles small.over { color: var(--bad); }
+.cat-tiles .bar { height: 5px; }
+
+/* ---------- Bills ---------- */
+.month-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border-radius: 16px; padding: 4px; margin-bottom: 14px; box-shadow: var(--shadow); }
+:root[data-mode='dark'] .month-nav { border: 1px solid var(--line); }
+.month-nav > div { text-align: center; display: flex; flex-direction: column; align-items: center; }
+.month-nav b { font-family: var(--font-display); font-size: 16px; }
+.month-nav .sub { font-size: 12px; color: var(--ink2); }
+.month-nav .icon-btn { width: 44px; height: 44px; background: none; color: var(--accent); }
+.bill-group + .bill-group { margin-top: 12px; }
+.bill-group > .label { margin: 4px 0 2px; }
+.date-tile { width: 44px; height: 48px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; font-family: var(--font-display); font-weight: 700; font-size: 17px; line-height: 1.1; }
+.date-tile small { font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.04em; }
+.date-tile.soon { background: var(--warn-soft); color: var(--warn); }
+.date-tile.paid { background: var(--surface2); color: var(--ink3); }
+.split-head { display: flex; align-items: center; gap: 12px; }
+.split-head .dot { width: 44px; height: 44px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); }
+.split-head .sub { font-size: 12.5px; color: var(--ink2); }
+.split-note { font-size: 12.5px; color: var(--ink2); background: var(--surface2); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+.split-note b { color: var(--ink); }
+.parts-check { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-radius: 12px; padding: 10px 12px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; font-weight: 600; }
+.parts-check.ok { background: color-mix(in oklab, var(--good) 14%, var(--surface)); color: var(--good); }
+.parts-row .field { margin-bottom: 10px; }
+
+/* ---------- Spending ---------- */
+.wbars-plot { position: relative; display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--line); }
+.wbars-plot button { border: 0; background: none; border-radius: 10px; flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; padding: 0; color: var(--ink2); position: relative; }
+.wbars-plot button.on { background: var(--surface2); color: var(--ink); font-weight: 700; }
+.wbars-plot i { width: 22px; border-radius: 4px 4px 0 0; background: color-mix(in oklab, var(--accent) 40%, var(--surface2)); display: block; }
+.wbars-plot button.on i { background: var(--accent); }
+.wbars-plot i.over { background: color-mix(in oklab, var(--bad) 55%, var(--surface2)); }
+.wbars-plot button.on i.over { background: var(--bad); }
+.wbars-plot span { font-size: 11px; height: 16px; }
+.wbars-line { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--ink3); pointer-events: none; z-index: 1; }
+.k-budget { width: 14px; border-top: 2px dashed var(--ink3); display: inline-block; }
+.pay-list .field { margin-bottom: 4px; }

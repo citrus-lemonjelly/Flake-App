@@ -12,6 +12,19 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.13.0',
+    date: '2026-11-10',
+    title: 'A simpler Flake: Home, Bills, Spending and Debt',
+    items: [
+      'Home shows what’s left over this month: money in against everything going out, with a small chart you can flip between six months and this month day by day.',
+      'Log pay sits right on that card: type what each paycheck really was as it’s deposited.',
+      'New Bills page: every bill and card payment for the month, grouped by the payday that pays it. Tap the circle to mark it paid for that month.',
+      'Save for a bill in parts: set money aside from two paychecks into its own bucket, then log the payment when it goes out (great for a mortgage paid on the 1st).',
+      'Spending is week by week: each budget, the purchases, and the bills leaving the bank that week. Budgets are all weekly now.',
+      'Debts and savings goals live on the Debt page. Balance check-ins are gone; logging pay and ticking off bills keeps the numbers right.',
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2026-10-26',
     title: 'Money: your plan and spending in one place',

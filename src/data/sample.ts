@@ -46,6 +46,11 @@ export function sampleData(): AppData {
     dueDay: 1,
     funding: 'split',
     includeInPlan: false,
+    // Saved for from the two paychecks before it's due, then paid on the 1st.
+    parts: [
+      { day: 15, amount: $(851.25) },
+      { day: 31, amount: $(851.25) },
+    ],
   });
   const visa = debt({
     name: 'Visa',
@@ -85,14 +90,15 @@ export function sampleData(): AppData {
   return {
     ...data,
     household: { name: 'Alex & Sam', people: ['Alex', 'Sam'], weekStartsOn: 5 },
-    settings: { ...data.settings, monthlyExtraForDebt: $(500), cashBuffer: $(150) },
+    settings: { ...data.settings, monthlyExtraForDebt: $(500), cashBuffer: $(150), billTiming: 'payday' },
     incomes,
     debts: [mortgage, visa, store, car],
     bills: [bill('Electric', 120, 3), bill('Internet', 70, 8), bill('Phones', 95, 14), bill('Insurance', 160, 25)],
     categories: [
       entity<Category>({ name: 'Groceries', amount: $(140), cadence: 'weekly' }),
       entity<Category>({ name: 'Gas', amount: $(45), cadence: 'weekly' }),
-      entity<Category>({ name: 'Fun Money', amount: $(150), cadence: 'per-period' }),
+      entity<Category>({ name: 'Eating out', amount: $(60), cadence: 'weekly' }),
+      entity<Category>({ name: 'Household', amount: $(40), cadence: 'weekly' }),
     ],
     funds: [emergency, vacation],
     checkIns: [entity({ date: asOf, balance: $(1850), note: '' })],

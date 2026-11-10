@@ -1,24 +1,20 @@
-import { useState, type ReactNode } from 'react';
-import { byId, live } from '../engine';
-import { completeAllocation, recordPaycheck } from '../store/actions';
+import { useMemo, useState, type ReactNode } from 'react';
+import { addDays, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import type { Derived } from '../state/derive';
-import { Bar, Empty, type Segment } from '../ui/components';
-import { Icon } from '../ui/icons';
-import { STRATEGY_LABEL, minus, money, monthOnly, monthYear, monthsBetween, shortDate, weekdayDate, weekdayShort } from '../ui/format';
-import { AssignSheet } from '../sheets/AssignSheet';
-import { CheckInSheet } from '../sheets/CheckInSheet';
-import { AssumptionsSheet, CushionSheet, MeaningSheet } from '../sheets/InfoSheets';
-import { BillSheet, CategorySheet, DebtSheet, IncomeSheet, PaycheckSheet } from '../sheets/EditSheets';
+import { Bar, type Segment } from '../ui/components';
+import { STRATEGY_LABEL, money, monthOnly, monthYear, shortDate, weekdayDate, weekdayShort } from '../ui/format';
+import { BillSheet, CategorySheet, DebtSheet, IncomeSheet } from '../sheets/EditSheets';
 import { HouseholdSheet, TimingSheet } from '../sheets/GuideSheets';
 import { SyncSheet } from '../sheets/SyncSheet';
 import { useSyncStatus } from '../state/sync';
 import { confirmStep, guideSteps, setGuide, type GuideStep, type GuideStepId } from '../guide';
 import { LogSheet } from '../sheets/LogSheet';
-import { SpendingSheet } from '../sheets/SpendingSheet';
-import { basisText as payBasisText } from '../ui/PaydayRow';
+import { PaySheet } from '../sheets/PaySheet';
 import { ScreenTip } from '../ui/ScreenTip';
+import { MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
+import { Tick, useBillActions } from '../ui/billActions';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
 const shortName = (n: string) => n.replace(/\s+(card|loan)$/i, '');
@@ -50,19 +46,17 @@ export function Home() {
   const x = useDerived();
   const ui = useUI();
   const name = data.household.people[0] ?? 'there';
-  const p = x.current;
+  const nextPay = x.nextPaydays[0];
 
   return (
     <>
       <header className="page-head">
         <div>
           <h1>Hi, {name}</h1>
-          {p && (
-            <div className="sub">
-              This paycheck: {shortDate(p.period.start)} – {shortDate(p.period.end)}
-              {x.nextPaydays[0] && ` · next pay ${weekdayShort(x.nextPaydays[0].payday)}`}
-            </div>
-          )}
+          <div className="sub">
+            {weekdayDate(x.today)}
+            {nextPay && ` · next pay ${weekdayShort(nextPay.payday)}`}
+          </div>
         </div>
         <div className="actions">
           <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
@@ -71,20 +65,19 @@ export function Home() {
         </div>
       </header>
 
-      <ScreenTip id="home">
-        <b>Safe to spend</b> is what you can use before payday after bills, budgets and the money you keep in the bank. <b>Next up</b> is the one thing to do now. Check in with your balance a couple of times a week and Flake keeps the rest up to date.
+      <ScreenTip id="home2">
+        <b>Left over</b> is this month's money in minus everything going out: bills, money set aside for bills you save up for, and spending. Tap <b>Log pay</b> when a paycheck lands to put in what really arrived.
       </ScreenTip>
 
       <div className="home-grid">
         <div className="stack">
           <GettingStarted />
-          <CashHero />
-          <NextUp />
+          <LeftOver />
+          <FlowCard />
         </div>
         <div className="stack">
-          <Budgets />
-          {data.settings.showDebtOnHome && <DebtCard />}
-          {!data.settings.showDebtOnHome && <NextMilestone />}
+          <DueSoon />
+          <ThisWeek />
         </div>
       </div>
     </>
@@ -115,8 +108,6 @@ function GettingStarted() {
       bills: () => <BillSheet />,
       budgets: () => <CategorySheet />,
       debts: () => <DebtSheet />,
-      keep: () => <CushionSheet />,
-      checkin: () => <CheckInSheet />,
       sync: () => <SyncSheet />,
     };
     ui.open(sheets[s.id]());
@@ -139,7 +130,7 @@ function GettingStarted() {
           <div>
             <h3 style={{ margin: 0 }}>You're all set up 🎉</h3>
             <div className="muted" style={{ fontSize: 13 }}>
-              From here on, just check in with your balance a couple of times a week.
+              From here on, log pay when it lands and tick bills off as you pay them.
             </div>
           </div>
           <button className="btn small ghost" onClick={hide}>
@@ -221,474 +212,245 @@ function GettingStarted() {
   );
 }
 
-/** The one hero: what can I safely spend before payday? */
-function CashHero() {
+/** The one big number: what's left this month once everything going out is counted. */
+function LeftOver() {
+  const data = useData();
   const x = useDerived();
   const ui = useUI();
-  const [showMath, setShowMath] = useState(false);
-  const s = x.safe;
-  const assign = () => x.current && ui.open(<AssignSheet periodStart={x.current.period.start} />);
-
-  if (!s || !x.lastCheckIn)
-    return (
-      <section className="hero" aria-label="Safe to spend">
-        <div className="top">
-          <div className="label">Safe to spend before payday</div>
-        </div>
-        <div className="big money">—</div>
-        <div className="hero-sub">Check in with your bank balance to see what you can safely spend or put toward debt.</div>
-        <div className="hero-btns">
-          <button className="btn white" onClick={() => ui.open(<CheckInSheet />)}>
-            Check in
-          </button>
-        </div>
-      </section>
-    );
-
-  const heldBack = s.balance - s.safe;
-  const status =
-    x.lastCheckIn.date === x.today
-      ? 'Balance checked today'
-      : x.paydaysSinceCheckIn > 0
-        ? `Balance estimated from your ${shortDate(x.lastCheckIn.date)} check-in`
-        : `Balance from your ${shortDate(x.lastCheckIn.date)} check-in`;
-
+  const [m] = useMemo(() => monthFlows(data, x.today, 0, 0), [data, x.today]);
+  const flow = m!;
+  const buckets = billItems(data)
+    .filter((i) => i.parts)
+    .map((i) => ({ item: i, balance: bucketBalance(data, i) }));
+  const share = flow.inTotal > 0 ? Math.min(1, flow.outTotal / flow.inTotal) : 1;
   return (
-    <section className="hero" aria-label="Safe to spend">
+    <section className="hero" aria-label="Left over this month">
       <div className="top">
-        <div className="label">
-          Safe to spend before payday
-          <button className="info" aria-label="What this means" onClick={() => ui.open(<MeaningSheet />)}>
-            ?
-          </button>
+        <div className="label">Left over in {monthName(flow.start)}</div>
+        <button className="btn white small" onClick={() => ui.open(<PaySheet />)}>
+          + Log pay
+        </button>
+      </div>
+      <div className={`big ${flow.left < 0 ? 'neg' : ''}`}>{flow.left < 0 ? '−' : ''}{money(Math.abs(flow.left), true)}</div>
+      <div className="hero-sub">{flow.left < 0 ? 'More is going out than coming in this month.' : 'After bills, set-asides and spending · free for debt and savings'}</div>
+      <div className="hero-split" role="img" aria-label={`${Math.round(share * 100)}% of the money coming in is going out`}>
+        <i style={{ width: `${share * 100}%` }} />
+      </div>
+      <div className="hero-tiles">
+        <div>
+          <span>Money in</span>
+          <b>{money(flow.inTotal, true)}</b>
+          <small>{money(flow.inSoFar, true)} arrived so far</small>
+        </div>
+        <div>
+          <span>Money out</span>
+          <b>{money(flow.outTotal, true)}</b>
+          <small>{money(flow.outSoFar, true)} out so far</small>
         </div>
       </div>
-      <div className="big money">{money(s.safe)}</div>
-      <div className="math-line">
-        <span>
-          {money(s.balance, true)} balance − {money(heldBack, true)} held back
-        </span>
-        <button className="link" aria-expanded={showMath} onClick={() => setShowMath(!showMath)}>
-          {showMath ? 'Hide math' : 'Show math'}
+      {buckets.map(({ item, balance }) => (
+        <button key={item.itemId} className="hero-bucket" onClick={() => ui.go('bills')}>
+          <span>{item.name} bucket</span>
+          <b>{balance >= 0 ? `${money(balance)} saved` : `${money(-balance)} short`}</b>
         </button>
-      </div>
-      {showMath && (
-        <div className="math">
-          <div className="row">
-            <span>Bank balance{x.lastCheckIn.date === x.today ? '' : ' (estimated)'}</span>
-            <span>{money(s.balance)}</span>
-          </div>
-          <div className="row">
-            <span>Bills before payday</span>
-            <span>{minus(s.upcomingTotal)}</span>
-          </div>
-          <div className="row">
-            <span>Budget money not spent yet</span>
-            <span>{minus(s.remainingBudgets)}</span>
-          </div>
-          <div className="row">
-            <span>Assigned but not done yet</span>
-            <span>{minus(s.plannedNotDone)}</span>
-          </div>
-          {s.fundsInChecking > 0 && (
-            <div className="row">
-              <span>Savings kept in checking</span>
-              <span>{minus(s.fundsInChecking)}</span>
-            </div>
-          )}
-          <div className="row">
-            <span>
-              Kept in the bank{' '}
-              <button className="link" onClick={() => ui.open(<CushionSheet />)}>
-                Change
-              </button>
-            </span>
-            <span>{minus(s.buffer)}</span>
-          </div>
-          <div className="row total">
-            <span>Safe to spend</span>
-            <span>{money(s.safe)}</span>
-          </div>
-        </div>
-      )}
-      <div className="status">
-        {status} · keeps {money(s.buffer, true)} in the bank{" "}
-        <button className="link" onClick={() => ui.open(<CushionSheet />)}>
-          Change
-        </button>
-      </div>
-      <div className="hero-btns">
-        <button className="btn white" onClick={() => ui.open(<CheckInSheet />)}>
-          Check in
-        </button>
-        <button className="btn glass" onClick={assign}>
-          Assign
-        </button>
-      </div>
+      ))}
     </section>
   );
 }
 
-/** One thing to do next, chosen in derive(). */
-function NextUp() {
+const monthName = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+
+/** Money in vs money out: six months of bars, or this month as running lines. */
+function FlowCard() {
   const data = useData();
   const x = useDerived();
-  const ui = useUI();
-  const update = useUpdate();
-  const n = x.nextAction;
-  const p = x.current;
-  const target = x.payoffOrder[0]?.debt.name;
+  const [view, setView] = useState<'months' | 'month'>('months');
+  const months = useMemo(() => monthFlows(data, x.today, 3, 2), [data, x.today]);
+  const [sel, setSel] = useState(3);
+  const [day, setDay] = useState<number | null>(null);
+  const flow = months[3]!;
 
-  if (n.kind === 'none')
-    return (
-      <div className="card next">
-        <div className="ic">
-          <Icon name="check" size={20} />
-        </div>
-        <div>
-          <h4>You're set until payday</h4>
-          <p>Nothing needs you right now.{x.nextPaydays[0] && ` Next paycheck lands ${weekdayDate(x.nextPaydays[0].payday)}.`}</p>
-        </div>
-      </div>
-    );
-
-  if (n.kind === 'confirm-pay') {
-    const pd = n.payday;
-    const who = pd.owner === 'joint' ? pd.name : `${pd.owner}'s paycheck`;
-    return (
-      <div className="card">
-        <div className="label" style={{ marginBottom: 8 }}>
-          Next up
-        </div>
-        <div className="next">
-          <div className="ic">
-            <Icon name="check" size={20} />
-          </div>
-          <div>
-            <h4>
-              Did {who} land as {money(pd.amount)}?
-            </h4>
-            <p>
-              {weekdayDate(pd.payday)} · {payBasisText(pd, byId(data.incomes, pd.sourceId)?.hourly?.usualHours)}. Confirming it puts the real number in your plan.
-            </p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button
-            className="btn"
-            style={{ flex: 1 }}
-            onClick={() => {
-              update((d) => recordPaycheck(d, { sourceId: pd.sourceId, payday: pd.payday, amount: pd.amount }));
-              ui.toast(`Confirmed ${money(pd.amount)}`);
-            }}
-          >
-            Yes, {money(pd.amount)}
-          </button>
-          <button className="btn ghost" style={{ flex: 1 }} onClick={() => ui.open(<PaycheckSheet sourceId={pd.sourceId} payday={pd.payday} focus="amount" />)}>
-            Different amount
-          </button>
-        </div>
-      </div>
-    );
+  let title: ReactNode, line: ReactNode;
+  if (view === 'months') {
+    const m = months[sel]!;
+    title = `${monthName(m.start)} ${m.start.slice(0, 4)}${m.end >= x.today ? (m.start <= x.today ? ' (so far + planned)' : ' (planned)') : ''}`;
+    line = `In ${money(m.inTotal, true)} · out ${money(m.outTotal, true)} · ${m.left >= 0 ? 'kept' : 'short'} ${money(Math.abs(m.left), true)}`;
+  } else if (day === null) {
+    title = `Today: ${money(flow.inSoFar, true)} in, ${money(flow.outSoFar, true)} out`;
+    line = flow.outSoFar > flow.inSoFar ? 'More has gone out than come in so far; paydays ahead catch you up.' : 'Ahead so far this month.';
+  } else {
+    const d = flow.days[day]!;
+    const t = totalsTo(flow, day);
+    const notes = [d.in > 0 && `+${money(d.in, true)} in`, d.out > 0 && `−${money(d.out, true)} out`].filter(Boolean).join(', ');
+    title = `${weekdayDate(d.date)}${d.date > x.today ? ' (planned)' : ''}${notes ? ` · ${notes}` : ''}`;
+    line = `By then: in ${money(t.in, true)} · out ${money(t.out, true)}`;
   }
 
-  if (n.kind === 'log-hours') {
-    const pd = n.payday;
-    const source = byId(data.incomes, pd.sourceId);
-    return (
-      <div className="card">
-        <div className="label" style={{ marginBottom: 8 }}>
-          Next up
-        </div>
-        <div className="next">
-          <div className="ic">
-            <Icon name="plan" size={20} />
-          </div>
-          <div>
-            <h4>Log {pd.owner === 'joint' ? 'the' : `${pd.owner}'s`} hours</h4>
-            <p>
-              For the paycheck on {weekdayDate(pd.payday)}. Until then it's estimated at {money(pd.amount)}
-              {source?.hourly && pd.basis === 'usual' ? ` from the usual ${source.hourly.usualHours} hours` : ''}.
-            </p>
-          </div>
-        </div>
-        <button className="btn block" style={{ marginTop: 12 }} onClick={() => ui.open(<PaycheckSheet sourceId={pd.sourceId} payday={pd.payday} focus="hours" />)}>
-          Log hours
-        </button>
-      </div>
-    );
-  }
-
-  if (n.kind === 'check-in')
-    return (
-      <div className="card">
-        <div className="label" style={{ marginBottom: 8 }}>
-          Next up
-        </div>
-        <div className="next">
-          <div className="ic">
-            <Icon name="bank" size={20} />
-          </div>
-          <div>
-            <h4>Check in with your bank</h4>
-            <p>{n.reason} It takes about 10 seconds.</p>
-          </div>
-        </div>
-        <button className="btn block" style={{ marginTop: 12 }} onClick={() => ui.open(<CheckInSheet />)}>
-          Check in now
-        </button>
-        {p && p.unassigned > 0 && (
-          <div className="then">
-            <span>
-              Then: <b>{money(p.unassigned)}</b> is still in this paycheck's pot
-            </span>
-            <button className="link" onClick={() => ui.open(<AssignSheet periodStart={p.period.start} />)}>
-              Assign
-            </button>
-          </div>
-        )}
-      </div>
-    );
-
-  if (n.kind === 'assign' && p)
-    return (
-      <div className="card">
-        <div className="label" style={{ marginBottom: 8 }}>
-          Next up
-        </div>
-        <div className="next">
-          <div className="ic">
-            <Icon name="plus" size={20} />
-          </div>
-          <div>
-            <h4>Give the pot a job</h4>
-            <p>
-              {money(n.amount)} from this paycheck doesn't have a job yet.{target && ` Recommended: ${target}.`}
-            </p>
-          </div>
-        </div>
-        <button className="btn block" style={{ marginTop: 12 }} onClick={() => ui.open(<AssignSheet periodStart={p.period.start} />)}>
-          Assign {money(n.amount)}
-        </button>
-      </div>
-    );
-
-  if (n.kind === 'mark-done') {
-    const a = byId(data.allocations, n.allocationId);
-    const name = a && (a.target.type === 'debt' ? byId(data.debts, a.target.id)?.name : byId(data.funds, a.target.id)?.name);
-    return (
-      <div className="card">
-        <div className="label" style={{ marginBottom: 8 }}>
-          Next up
-        </div>
-        <div className="next">
-          <div className="ic">
-            <Icon name="check" size={20} />
-          </div>
-          <div>
-            <h4>Did you {a?.target.type === 'fund' ? 'move' : 'pay'} {money(n.amount)} to {name}?</h4>
-            <p>It was planned from this paycheck. Marking it done updates the balance.</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button className="btn" style={{ flex: 1 }} onClick={() => update((d) => completeAllocation(d, n.allocationId, x.today))}>
-            Yes, mark done
-          </button>
-          <button className="btn ghost" style={{ flex: 1 }} onClick={() => ui.go('money')}>
-            Open Money
-          </button>
-        </div>
-      </div>
-    );
-  }
-  return null;
-}
-
-/** The estimated debt-free date at a glance; the payoff order and every debt live on Progress. */
-function DebtCard() {
-  const data = useData();
-  const x = useDerived();
-  const ui = useUI();
-  if (!x.debtBlocks.length)
-    return (
-      <div className="card">
-        <div className="label">Estimated debt-free</div>
-        <Empty>Add your cards and loans under Progress to see a payoff date.</Empty>
-      </div>
-    );
-  const months = x.sim.debtFreeDate ? Math.max(0, monthsBetween(x.today, x.sim.debtFreeDate)) : null;
-  const allPaid = x.planTotal === 0;
-  return (
-    <div className="card debt-home">
-      <div className="row">
-        <span className="label">{allPaid ? 'Debt-free' : 'Estimated debt-free'}</span>
-        <button className="link" onClick={() => ui.go('progress')}>
-          See progress ›
-        </button>
-      </div>
-      <div className="date">{allPaid ? 'Done 🎉' : x.sim.debtFreeDate ? monthYear(x.sim.debtFreeDate) : 'Not within 50 years'}</div>
-      {!allPaid && (
-        <div className="faint" style={{ fontSize: 14 }}>
-          {months !== null && `About ${months} month${months === 1 ? '' : 's'} · `}
-          {money(x.planTotal, true)} to go
-        </div>
-      )}
-      {!allPaid && (
-        <div className="assume">
-          <span>{basisText(x, data.settings.monthlyExtraForDebt)}</span>
-          <button className="link" style={{ whiteSpace: 'nowrap' }} onClick={() => ui.open(<AssumptionsSheet />)}>
-            {x.assumptions.length ? 'Add details ›' : 'See how ›'}
-          </button>
-        </div>
-      )}
-      <NextMilestone inCard />
-    </div>
-  );
-}
-
-/** What's left in each spending budget this paycheck, so a logged purchase visibly lands somewhere. */
-function Budgets() {
-  const x = useDerived();
-  const ui = useUI();
-  const data = useData();
-  const lines = x.current?.lines.filter((l) => l.kind === 'category') ?? [];
-  if (!lines.length || !x.current) return <RecentSpending />;
-  const { start, end } = x.current.period;
-  // Spending a check-in worked out (unsorted) comes off the budgets as a whole.
-  const fromCheckIns = live(data.spending)
-    .filter((s) => s.inferred && s.date >= start && s.date <= end)
-    .reduce((t, s) => t + s.amount, 0);
-  const leftOverall = Math.max(0, lines.reduce((t, l) => t + Math.max(0, l.amount - (x.spentThisPeriod.get(l.refId) ?? 0)), 0) - fromCheckIns);
   return (
     <div className="card">
       <h3>
-        This paycheck's budgets
-        <button className="link" onClick={() => ui.open(<LogSheet />)}>
-          + Log
-        </button>
-      </h3>
-      <ul className="list">
-        {lines.map((l) => {
-          const spent = x.spentThisPeriod.get(l.refId) ?? 0;
-          const left = l.amount - spent;
-          return (
-            <li key={l.refId}>
-              <button className="rowbtn" onClick={() => ui.go('money', { categoryId: l.refId })} aria-label={`${l.name} spending`}>
-                <div className="grow">
-                  <div className="row" style={{ fontSize: 14 }}>
-                    <span>{l.name}</span>
-                    <span style={{ color: left < 0 ? 'var(--warn)' : undefined, fontWeight: 600 }}>{left < 0 ? `${money(-left)} over` : `${money(left)} left`}</span>
-                  </div>
-                  <div style={{ marginTop: 6 }}>
-                    <Bar value={l.amount ? spent / l.amount : 0} tone={left < 0 ? 'warn' : undefined} />
-                  </div>
-                  <div className="explain">
-                    {money(spent, true)} of {money(l.amount, true)} spent
-                  </div>
-                </div>
-              </button>
-            </li>
-          );
-        })}
-        {fromCheckIns > 0 && (
-          <li>
-            <div className="grow" style={{ fontSize: 14 }}>
-              Found at check-ins, not sorted
-              <div className="explain">Spending your balance showed that wasn't logged to a budget</div>
-            </div>
-            <span style={{ fontWeight: 600 }}>−{money(fromCheckIns)}</span>
-          </li>
-        )}
-      </ul>
-      {fromCheckIns > 0 && (
-        <div className="row" style={{ borderTop: '1px solid var(--line)', paddingTop: 10, fontWeight: 600, fontSize: 14 }}>
-          <span>Left across all budgets</span>
-          <span>{money(leftOverall)}</span>
-        </div>
-      )}
-      <RecentEntries count={2} />
-    </div>
-  );
-}
-
-/** The last few things logged, with a way into Money. */
-/** The latest logged entries, newest first. Shown inside the budgets card, or on its own. */
-function RecentEntries({ count, log }: { count: number; log?: boolean }) {
-  const data = useData();
-  const ui = useUI();
-  const recent = live(data.spending)
-    .slice()
-    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, count);
-  const label = (s: (typeof recent)[number]) => (s.inferred ? 'Found at check-in' : s.categoryId ? (byId(data.categories, s.categoryId)?.name ?? 'Removed budget') : 'Other');
-  return (
-    <div className="recent">
-      <div className="row">
-        <span className="label">Recent spending</span>
-        <span style={{ display: 'flex', gap: 14 }}>
-          {log && (
-            <button className="link" onClick={() => ui.open(<LogSheet />)}>
-              + Log
-            </button>
-          )}
-          <button className="link" onClick={() => ui.go('money')}>
-            See all spending ›
+        Money flow
+        <span className="mini-seg" role="group" aria-label="Chart view">
+          <button aria-pressed={view === 'months'} onClick={() => setView('months')}>
+            6 months
+          </button>
+          <button
+            aria-pressed={view === 'month'}
+            onClick={() => {
+              setView('month');
+              setDay(null);
+            }}
+          >
+            This month
           </button>
         </span>
+      </h3>
+      <div className="flow-key">
+        <span><i className="k-in" /> Money in</span>
+        <span><i className="k-out" /> Money out</span>
+        <span className="faint">{view === 'months' ? 'Lighter: planned' : 'Dashed: planned'}</span>
       </div>
-      {recent.length ? (
+      <div className="flow-readout" aria-live="polite">
+        <b>{title}</b>
+        <div>{line}</div>
+      </div>
+      {view === 'months' ? <MonthBars months={months} today={x.today} selected={sel} onSelect={setSel} /> : <MonthLines flow={flow} today={x.today} day={day} onDay={setDay} />}
+    </div>
+  );
+}
+
+type DueItem =
+  | { kind: 'bill'; date: string; o: BillOccurrence }
+  | { kind: 'part'; date: string; item: BillItem; dueDate: string; p: PartStatus; of: number };
+
+/** Bills and set-asides coming up in the next two weeks (and any that slipped by), to tick off. */
+function DueSoon() {
+  const data = useData();
+  const x = useDerived();
+  const ui = useUI();
+  const act = useBillActions();
+  const from = addDays(x.today, -7), to = addDays(x.today, 14);
+  const bills: DueItem[] = billsDue(data, from, addDays(to, 31))
+    .filter((o) => !o.paid && !o.item.parts && o.payDate >= from && o.payDate <= to)
+    .map((o) => ({ kind: 'bill', date: o.payDate, o }));
+  const parts: DueItem[] = billItems(data)
+    .filter((i) => i.parts)
+    .flatMap((item) => {
+      const dues = [savingFor(data, item, x.today), savingFor(data, item, addDays(x.today, 14))];
+      return [...new Set(dues)].flatMap((dueDate) => {
+        const st = splitStatus(data, item, dueDate);
+        return st.parts.filter((p) => !p.done && p.date >= from && p.date <= to).map((p): DueItem => ({ kind: 'part', date: p.date, item, dueDate, p, of: st.parts.length }));
+      });
+    });
+  const items = [...bills, ...parts].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 6);
+
+  const { year, month } = { year: x.today.slice(0, 4), month: x.today.slice(5, 7) };
+  const monthBills = billsDue(data, `${year}-${month}-01`, `${year}-${month}-31`);
+  const paidCount = monthBills.filter((o) => o.paid).length;
+  const toPay = monthBills.filter((o) => !o.paid).reduce((s, o) => s + o.amount, 0);
+
+  const when = (date: string, verb: string) => {
+    const d = Math.round((Date.parse(date) - Date.parse(x.today)) / 864e5);
+    return d < 0 ? `${verb} ${shortDate(date)} · ${-d} day${d === -1 ? '' : 's'} ago` : d === 0 ? `${verb} today` : d === 1 ? `${verb} tomorrow` : `${verb} ${weekdayDate(date)}`;
+  };
+
+  return (
+    <div className="card">
+      <h3>
+        Bills due soon
+        <button className="link" onClick={() => ui.go('bills')}>
+          All bills ›
+        </button>
+      </h3>
+      <div className="muted" style={{ fontSize: 13, marginTop: -6, marginBottom: 4 }}>
+        {monthBills.length ? `${paidCount} of ${monthBills.length} paid in ${monthName(x.today)} · ${money(toPay)} still to pay` : 'No bills yet.'}
+      </div>
+      {items.length ? (
         <ul className="list">
-          {recent.map((s) => (
-            <li key={s.id}>
-              <button className="rowbtn" onClick={() => ui.open(<SpendingSheet id={s.id} />)}>
+          {items.map((it) =>
+            it.kind === 'bill' ? (
+              <li key={`b${it.o.item.itemId}${it.o.dueDate}`}>
+                <Tick done={false} label={`Mark ${it.o.item.name} paid`} onClick={() => act.togglePaid(it.o)} />
                 <div className="grow">
-                  {s.note && !s.inferred ? s.note : label(s)}
-                  <div className="sub">
-                    {weekdayDate(s.date)}
-                    {s.note && !s.inferred ? ` · ${label(s)}` : ''}
+                  <div style={{ fontWeight: 600 }}>{it.o.item.name}</div>
+                  <div className={`sub ${it.date <= addDays(x.today, 2) ? 'soon' : ''}`}>
+                    {when(it.date, it.o.item.timing === 'payday' ? 'Pay' : 'Due')}
+                    {it.o.payDate !== it.o.dueDate && ` · due ${shortDate(it.o.dueDate)}`}
                   </div>
                 </div>
-                <span style={{ fontWeight: 600 }}>{money(s.amount)}</span>
-              </button>
-            </li>
-          ))}
+                <span className="num">{money(it.o.amount)}</span>
+              </li>
+            ) : (
+              <li key={`p${it.item.itemId}${it.dueDate}${it.p.index}`}>
+                <Tick done={false} label={`Mark ${it.item.name} part ${it.p.index + 1} set aside`} onClick={() => act.toggleSetAside(it.item, it.dueDate, it.p)} />
+                <div className="grow">
+                  <div style={{ fontWeight: 600 }}>
+                    {it.item.name} · set aside {it.p.index + 1} of {it.of}
+                  </div>
+                  <div className={`sub ${it.date <= addDays(x.today, 2) ? 'soon' : ''}`}>{when(it.date, 'Payday')} · for {shortDate(it.dueDate)}</div>
+                </div>
+                <span className="num">{money(it.p.amount)}</span>
+              </li>
+            ),
+          )}
         </ul>
       ) : (
-        <div className="explain" style={{ padding: '6px 0' }}>
-          Nothing logged yet. Tap + Log after a purchase.
-        </div>
+        <div className="empty">Nothing due in the next two weeks.</div>
       )}
     </div>
   );
 }
 
-/** Recent spending as its own card, for households without budgets yet. */
-function RecentSpending() {
-  return (
-    <div className="card">
-      <RecentEntries count={3} log />
-    </div>
-  );
-}
-
-/** The next projected milestone: a line inside the debt card, or its own card when that's hidden. */
-function NextMilestone({ inCard }: { inCard?: boolean }) {
+/** This week's spending against the weekly budgets. */
+function ThisWeek() {
+  const data = useData();
   const x = useDerived();
   const ui = useUI();
-  const m = x.milestones.filter((v) => v.status === 'projected' && v.date).sort((a, b) => a.date!.localeCompare(b.date!))[0];
-  if (!m) return null;
+  const [week] = weekRanges(data, x.today, 1);
+  const w = weekSpending(data, week!);
+  const daysLeft = Math.round((Date.parse(w.end) - Date.parse(x.today)) / 864e5);
   return (
-    <button className={inCard ? 'ms-line in-card' : 'card ms-line'} onClick={() => ui.go('progress')}>
-      <span className="c" />
-      <span className="grow">
-        <span className="label" style={{ display: 'block' }}>
-          Next milestone
-        </span>
-        {m.milestone.name}
-      </span>
-      <span className="faint" style={{ fontSize: 13 }}>
-        est. {monthYear(m.date!)} ›
-      </span>
-    </button>
+    <div className="card">
+      <h3>
+        This week's spending
+        <button className="link" onClick={() => ui.go('spending')}>
+          Details ›
+        </button>
+      </h3>
+      {w.byCategory.length ? (
+        <>
+          <div className="row" style={{ alignItems: 'baseline', marginTop: -4 }}>
+            <span>
+              <span className="num" style={{ fontSize: 22 }}>{money(w.spent)}</span> <span className="muted" style={{ fontSize: 13 }}>of {money(w.budget, true)}</span>
+            </span>
+            <span className="muted" style={{ fontSize: 13 }}>
+              {w.budget - w.spent >= 0 ? `${money(w.budget - w.spent)} left` : `${money(w.spent - w.budget)} over`} · {daysLeft === 0 ? 'last day' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
+            </span>
+          </div>
+          <div style={{ margin: '8px 0 14px' }}>
+            <Bar value={w.budget ? w.spent / w.budget : 0} tone={w.spent > w.budget ? 'warn' : undefined} />
+          </div>
+          <div className="cat-tiles">
+            {w.byCategory.map((c) => (
+              <button key={c.category.id} onClick={() => ui.go('spending', { categoryId: c.category.id })}>
+                <b>{c.category.name}</b>
+                <small className={c.spent > c.budget ? 'over' : ''}>
+                  {money(c.spent, true)} of {money(c.budget, true)}
+                  {c.spent > c.budget && ' · over'}
+                </small>
+                <Bar value={c.budget ? c.spent / c.budget : 0} tone={c.spent > c.budget ? 'warn' : undefined} />
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="empty">
+          No budgets yet.{' '}
+          <button className="link" onClick={() => ui.open(<CategorySheet />)}>
+            Add one
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

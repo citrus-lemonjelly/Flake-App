@@ -24,6 +24,8 @@ const minPayment = z.discriminatedUnion('type', [
   z.object({ type: z.literal('percent'), percent: z.number().min(0).max(100), floor: cents }),
 ]);
 
+const parts = z.array(z.object({ day: dueDay, amount: cents })).optional();
+
 const allocationTarget = z.object({ type: z.enum(['debt', 'fund', 'category']), id: z.string() });
 
 const milestoneRule = z.discriminatedUnion('type', [
@@ -74,7 +76,10 @@ export const appDataSchema = z.object({
   ),
   // Added after v1 shipped; older backups get an empty list.
   billPayments: z
-    .array(z.object({ ...base, itemKind: z.enum(['bill', 'debt']), itemId: z.string(), dueDate: date, paidOn: date, amount: cents.nullable() }))
+    .array(z.object({ ...base, itemKind: z.enum(['bill', 'debt']), itemId: z.string(), dueDate: date, paidOn: date, amount: cents.nullable(), paid: z.boolean().optional() }))
+    .default([]),
+  setAsides: z
+    .array(z.object({ ...base, itemKind: z.enum(['bill', 'debt']), itemId: z.string(), dueDate: date, part: z.number().int().min(0), date, amount: cents }))
     .default([]),
   paychecks: z
     .array(z.object({ ...base, sourceId: z.string(), payday: date, hours: z.number().min(0).max(200).nullable(), amount: cents.nullable() }))
@@ -83,7 +88,7 @@ export const appDataSchema = z.object({
     z.object({ ...base, date, amount: cents, sourceId: z.string().nullable(), kind: z.enum(['bonus', 'other']), note: z.string() }),
   ),
   bills: z.array(
-    z.object({ ...base, name: z.string(), amount: cents, dueDay, funding, owner, autopay: z.boolean(), paidOn: z.enum(['payday', 'due-date']).optional() }),
+    z.object({ ...base, name: z.string(), amount: cents, dueDay, funding, owner, autopay: z.boolean(), paidOn: z.enum(['payday', 'due-date']).optional(), parts }),
   ),
   categories: z.array(
     z.object({ ...base, name: z.string(), amount: cents, cadence: z.enum(['weekly', 'per-period', 'monthly']), icon: z.string().optional() }),
@@ -107,6 +112,7 @@ export const appDataSchema = z.object({
       includeInPlan: z.boolean(),
       originalBalance: cents.optional(),
       paidOn: z.enum(['payday', 'due-date']).optional(),
+      parts,
     }),
   ),
   debtPayments: z.array(

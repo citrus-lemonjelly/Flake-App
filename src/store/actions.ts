@@ -8,11 +8,13 @@ import type {
   Entity,
   Household,
   PaycheckRecord,
+  SetAside,
   Id,
   ISODate,
   Settings,
 } from '../model/types';
-import { byId } from '../engine/live';
+import { byId, live } from '../engine/live';
+import { weeklyAmount } from '../engine/flow';
 
 /**
  * Pure state transitions. Each returns a new AppData and stamps updatedAt on
@@ -53,7 +55,7 @@ export function updateHousehold(data: AppData, fields: Partial<Household>): AppD
   return { ...data, household: { ...data.household, ...fields, updatedAt: nowStamp() } };
 }
 
-export const ENTITY_KEYS: CollectionKey[] = ['incomes', 'paychecks', 'billPayments', 'incomeReceived', 'bills', 'categories', 'spending', 'debts', 'debtPayments', 'funds', 'allocations', 'checkIns', 'milestones'];
+export const ENTITY_KEYS: CollectionKey[] = ['incomes', 'paychecks', 'billPayments', 'setAsides', 'incomeReceived', 'bills', 'categories', 'spending', 'debts', 'debtPayments', 'funds', 'allocations', 'checkIns', 'milestones'];
 
 /** Stamp every record as just edited, e.g. after importing a backup, so sync uploads all of it. */
 export function touchAll(data: AppData): AppData {
@@ -115,6 +117,42 @@ export function recordBillPayment(data: AppData, p: { itemKind: 'bill' | 'debt';
   const existing = data.billPayments.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate);
   if (existing) return patch(data, 'billPayments', existing.id, { paidOn: p.paidOn, ...(p.amount !== undefined && { amount: p.amount }) });
   return upsert(data, 'billPayments', entity<BillPayment>({ itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: p.paidOn, amount: p.amount ?? null }));
+}
+
+/**
+ * Mark one month's bill or debt payment paid (or not). Paid ahead of plan, it's dated today;
+ * otherwise it keeps its planned date. Unmarking removes the record, so it goes back to plan.
+ */
+export function markBillPaid(
+  data: AppData,
+  p: { itemKind: 'bill' | 'debt'; itemId: Id; dueDate: ISODate; planned: ISODate; today: ISODate },
+  paid: boolean,
+): AppData {
+  const existing = data.billPayments.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate);
+  if (!paid) return existing ? remove(data, 'billPayments', existing.id) : data;
+  const paidOn = p.today < p.planned ? p.today : p.planned;
+  const next = recordBillPayment(data, { itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: existing?.paidOn ?? paidOn });
+  const rec = next.billPayments.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate)!;
+  return patch(next, 'billPayments', rec.id, { paid: true });
+}
+
+/** Mark one part of a bill saved for in parts as set aside into its bucket (or undo it). */
+export function setAsidePart(
+  data: AppData,
+  p: { itemKind: 'bill' | 'debt'; itemId: Id; dueDate: ISODate; part: number; date: ISODate; amount: Cents },
+  on: boolean,
+): AppData {
+  const existing = data.setAsides.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate && r.part === p.part);
+  if (!on) return existing ? remove(data, 'setAsides', existing.id) : data;
+  if (existing) return data;
+  return upsert(data, 'setAsides', entity<SetAside>({ ...p }));
+}
+
+/** Turn every per-paycheck and monthly budget into the same money per week. */
+export function budgetsToWeekly(data: AppData): AppData {
+  let next = data;
+  for (const c of live(data.categories)) if (c.cadence !== 'weekly') next = patch(next, 'categories', c.id, { cadence: 'weekly', amount: weeklyAmount(data, c) });
+  return next;
 }
 
 export function checkIn(data: AppData, c: { date: ISODate; balance: Cents; note?: string }): { data: AppData; checkIn: BalanceCheckIn } {
