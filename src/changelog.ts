@@ -12,6 +12,12 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.13.1',
+    date: '2026-11-10',
+    title: 'Totals on the Bills page',
+    items: ['Each payday group under Still to pay shows its total, and the whole list shows what’s still to pay.'],
+  },
+  {
     version: '0.13.0',
     date: '2026-11-10',
     title: 'A simpler Flake: Home, Bills, Spending and Debt',
