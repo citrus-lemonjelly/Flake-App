@@ -12,6 +12,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.19.0',
+    date: '2026-11-10',
+    title: 'Send left over to a debt',
+    items: [
+      'The Left over card has “Send left over to a debt”: pick how much and which debt (the one up next in your plan is chosen for you).',
+      'Before sending, see the new debt-free date, when that debt is paid off, and the interest saved. It works for the mortgage too.',
+      'If the payment would take checking below $0 before payday, Flake warns you.',
+      'The payment is logged on the debt, lowers its balance, and comes out of Left over and the bank balance.',
+    ],
+  },
+  {
     version: '0.18.0',
     date: '2026-11-10',
     title: 'Spending: recent amounts, rollover, trends and who logged it',
