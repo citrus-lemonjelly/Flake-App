@@ -5,19 +5,40 @@ const TRIGGER = 72;
 const MAX = 112;
 
 /**
- * A list row you can swipe right to act on (mark a bill paid, or not paid).
- * Up-and-down still scrolls; a tap still taps. The label shows as it slides.
+ * A list row you can swipe right to act on (mark a bill paid, or not paid), and
+ * optionally left for a second action (delete). Up-and-down still scrolls; a tap
+ * still taps. The label shows as it slides.
  */
-export function SwipeRow({ label, onSwipe, children, className = '' }: { label: string; onSwipe: () => void; children: ReactNode; className?: string }) {
+export function SwipeRow({
+  label,
+  onSwipe,
+  leftLabel,
+  onSwipeLeft,
+  children,
+  className = '',
+}: {
+  label: string;
+  onSwipe: () => void;
+  leftLabel?: string;
+  onSwipeLeft?: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
   const [dx, setDx] = useState(0);
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   const mode = useRef<'idle' | 'swipe' | 'scroll'>('idle');
   const swiped = useRef(false);
   return (
     <li className={`swipe-row ${className}`}>
-      <div className={`swipe-bg ${dx >= TRIGGER ? 'ready' : ''}`} aria-hidden="true" style={{ opacity: Math.min(1, dx / TRIGGER) }}>
-        {label}
-      </div>
+      {dx >= 0 ? (
+        <div className={`swipe-bg ${dx >= TRIGGER ? 'ready' : ''}`} aria-hidden="true" style={{ opacity: Math.min(1, dx / TRIGGER) }}>
+          {label}
+        </div>
+      ) : (
+        <div className={`swipe-bg left ${-dx >= TRIGGER ? 'ready' : ''}`} aria-hidden="true" style={{ opacity: Math.min(1, -dx / TRIGGER) }}>
+          {leftLabel}
+        </div>
+      )}
       <div
         className="swipe-fg"
         style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: start.current ? 'none' : undefined }}
@@ -38,8 +59,8 @@ export function SwipeRow({ label, onSwipe, children, className = '' }: { label: 
             } else if (Math.abs(y) > 8) mode.current = 'scroll';
           }
           if (mode.current === 'swipe') {
-            const next = Math.max(0, Math.min(MAX, x));
-            if (next >= TRIGGER && dx < TRIGGER) haptic(6);
+            const next = Math.max(onSwipeLeft ? -MAX : 0, Math.min(MAX, x));
+            if (Math.abs(next) >= TRIGGER && Math.abs(dx) < TRIGGER) haptic(6);
             setDx(next);
           }
         }}
@@ -47,6 +68,7 @@ export function SwipeRow({ label, onSwipe, children, className = '' }: { label: 
           if (mode.current === 'swipe') {
             swiped.current = true;
             if (dx >= TRIGGER) onSwipe();
+            else if (dx <= -TRIGGER) onSwipeLeft?.();
           }
           start.current = null;
           mode.current = 'idle';

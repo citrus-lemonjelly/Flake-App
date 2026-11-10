@@ -22,10 +22,47 @@ export function weeklyBudget(data: AppData): Cents {
   return sum(live(data.categories).map((c) => weeklyAmount(data, c)));
 }
 
+/**
+ * What a bucket that rolls over carries into the week starting `weekStart`:
+ * every earlier week's amount less what was spent, since rollover was turned on.
+ * Negative when it was overspent.
+ */
+export function carriedIn(data: AppData, c: Category, weekStart: ISODate): Cents {
+  if (!c.rollover) return 0;
+  const [first] = weekRanges(data, c.rolloverSince ?? weekStart, 1);
+  const weekly = weeklyAmount(data, c);
+  const spends = live(data.spending).filter((s) => s.categoryId === c.id && s.date >= first!.start && s.date < weekStart);
+  let carry = 0;
+  for (let ws = first!.start, n = 0; ws < weekStart && n < 156; ws = addDays(ws, 7), n++) {
+    const we = addDays(ws, 6);
+    carry += weekly - sum(spends.filter((s) => s.date >= ws && s.date <= we).map((s) => s.amount));
+  }
+  return carry;
+}
+
+/** The last few different purchases in a bucket (one per place, its latest amount), newest first, for one-tap logging. */
+export function recentPurchases(data: AppData, categoryId: Id, count = 4): { note: string; amount: Cents }[] {
+  const seen = new Set<string>();
+  const out: { note: string; amount: Cents }[] = [];
+  const list = live(data.spending)
+    .filter((s) => s.categoryId === categoryId && !s.inferred)
+    .sort((a, b) => b.date.localeCompare(a.date) || loggedAt(b).localeCompare(loggedAt(a)));
+  for (const s of list) {
+    // One chip per place (its latest amount); purchases without a note, one per amount.
+    const k = s.note.trim() ? s.note.trim().toLowerCase() : `|${s.amount}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ note: s.note.trim(), amount: s.amount });
+    if (out.length === count) break;
+  }
+  return out;
+}
+
 export interface WeekSpending extends DateRange {
   budget: Cents;
   spent: Cents;
-  byCategory: { category: Category; budget: Cents; spent: Cents }[];
+  /** budget = weekly + carried (rollover buckets only). */
+  byCategory: { category: Category; budget: Cents; weekly: Cents; carried: Cents; spent: Cents }[];
   /** Spending that isn't from any budget. */
   other: Cents;
   purchases: Spending[];
@@ -33,7 +70,7 @@ export interface WeekSpending extends DateRange {
   bills: ScheduledOutflow[];
 }
 
-export function weekSpending(data: AppData, range: DateRange): WeekSpending {
+export function weekSpending(data: AppData, range: DateRange, withBills = true): WeekSpending {
   const purchases = live(data.spending)
     .filter((s) => s.date >= range.start && s.date <= range.end)
     .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt ?? b.updatedAt).localeCompare(a.createdAt ?? a.updatedAt));
@@ -41,7 +78,11 @@ export function weekSpending(data: AppData, range: DateRange): WeekSpending {
   for (const s of purchases) spentOn.set(s.categoryId, (spentOn.get(s.categoryId) ?? 0) + s.amount);
   const cats = live(data.categories);
   const known = new Set(cats.map((c) => c.id));
-  const byCategory = cats.map((category) => ({ category, budget: weeklyAmount(data, category), spent: spentOn.get(category.id) ?? 0 }));
+  const byCategory = cats.map((category) => {
+    const weekly = weeklyAmount(data, category);
+    const carried = carriedIn(data, category, range.start);
+    return { category, budget: weekly + carried, weekly, carried, spent: spentOn.get(category.id) ?? 0 };
+  });
   return {
     ...range,
     budget: sum(byCategory.map((c) => c.budget)),
@@ -49,7 +90,7 @@ export function weekSpending(data: AppData, range: DateRange): WeekSpending {
     byCategory,
     other: sum(purchases.filter((s) => !s.categoryId || !known.has(s.categoryId)).map((s) => s.amount)),
     purchases,
-    bills: outflowsBetween(data, range.start, range.end),
+    bills: withBills ? outflowsBetween(data, range.start, range.end) : [],
   };
 }
 
@@ -138,9 +179,9 @@ export function dailyFlow(data: AppData, start: ISODate, end: ISODate, today: IS
   const weekly = weeklyBudget(data);
   if (weekly > 0 && end > today) {
     const [thisWeek] = weekRanges(data, today, 1);
-    const spentThisWeek = sum(live(data.spending).filter((s) => s.date >= thisWeek!.start && s.date <= today).map((s) => s.amount));
+    // What's still left in each bucket this week (carry-over included; an overspent bucket adds nothing).
+    const leftThisWeek = sum(weekSpending(data, thisWeek!, false).byCategory.map((c) => Math.max(0, c.budget - c.spent)));
     const restOfWeek = daysBetween(today, thisWeek!.end);
-    const leftThisWeek = Math.max(0, weekly - spentThisWeek);
     for (const d of days) {
       if (d.date <= today) continue;
       const share = d.date <= thisWeek!.end ? (restOfWeek > 0 ? leftThisWeek / restOfWeek : 0) : weekly / 7;

@@ -99,9 +99,17 @@ export const appDataSchema = z.object({
     }),
   ),
   categories: z.array(
-    z.object({ ...base, name: z.string(), amount: cents, cadence: z.enum(['weekly', 'per-period', 'monthly']), icon: z.string().optional() }),
+    z.object({
+      ...base,
+      name: z.string(),
+      amount: cents,
+      cadence: z.enum(['weekly', 'per-period', 'monthly']),
+      icon: z.string().optional(),
+      rollover: z.boolean().optional(),
+      rolloverSince: date.optional(),
+    }),
   ),
-  spending: z.array(z.object({ ...base, date, amount: cents, categoryId: z.string().nullable(), note: z.string(), inferred: z.boolean().optional() })),
+  spending: z.array(z.object({ ...base, date, amount: cents, categoryId: z.string().nullable(), note: z.string(), inferred: z.boolean().optional(), by: z.string().optional() })),
   debts: z.array(
     z.object({
       ...base,

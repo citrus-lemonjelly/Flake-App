@@ -22,6 +22,8 @@ export function SpendingSheet({ id }: { id: string }) {
   const [where, setWhere] = useState<string>(entry ? (entry.inferred ? 'checkin' : (entry.categoryId ?? 'other')) : 'other');
   const [note, setNote] = useState(entry?.note ?? '');
   const [date, setDate] = useState(entry?.date ?? '');
+  const [by, setBy] = useState(entry?.by ?? '');
+  const people = data.household.people.filter((p) => p && p !== 'Me');
   if (!entry) return null;
 
   const options = [
@@ -57,6 +59,7 @@ export function SpendingSheet({ id }: { id: string }) {
                   // Once sorted, drop the automatic label so the entry reads as its budget.
                   note: where !== 'checkin' && note === 'Spending since last check-in' ? '' : note,
                   date,
+                  by: by || undefined,
                 }),
               );
               ui.toast('Saved');
@@ -77,6 +80,7 @@ export function SpendingSheet({ id }: { id: string }) {
       <SelectField label="Budget" value={where} options={options} onChange={setWhere} />
       <TextField label="Note" value={entry.inferred && note === 'Spending since last check-in' ? '' : note} onChange={setNote} placeholder="e.g. Costco" />
       <DateField label="Date" value={date} onChange={setDate} />
+      {people.length > 1 && <SelectField label="Logged by" value={by} options={[{ value: '', label: 'Not set' }, ...people.map((p) => ({ value: p, label: p }))]} onChange={setBy} />}
     </Sheet>
   );
 }

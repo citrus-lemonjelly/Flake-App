@@ -11,6 +11,8 @@ import { Icon } from '../ui/icons';
 import { money, shortDate, weekdayDate } from '../ui/format';
 import { HelpTip } from '../ui/ScreenTip';
 import { Tick, useBillActions } from '../ui/billActions';
+import { SwipeRow } from '../ui/Swipe';
+import { useRemoveWithUndo } from '../state/undo';
 
 /** Spending week by week: each budget, the purchases, and the bills leaving the bank that week. */
 export function Spending() {
@@ -18,12 +20,18 @@ export function Spending() {
   const x = useDerived();
   const ui = useUI();
   const update = useUpdate();
+  const removeWithUndo = useRemoveWithUndo();
   const [offset, setOffset] = useState(0);
   const [focus, setFocus] = useState<string | null>(ui.params.categoryId ?? null);
   useEffect(() => setFocus(ui.params.categoryId ?? null), [ui.params.categoryId]);
 
-  const weeks = weekRanges(data, addDays(x.today, (offset - 5) * 7), 6).map((r) => weekSpending(data, r));
-  const w = weeks[5]!;
+  // Eight weeks ending with the one shown: the last six for the chart, all eight for each bucket's trend.
+  const hist = weekRanges(data, addDays(x.today, (offset - 7) * 7), 8).map((r, i) => weekSpending(data, r, i === 7));
+  const weeks = hist.slice(2);
+  const w = hist[7]!;
+  const trend = (id: string) => hist.map((h) => h.byCategory.find((c) => c.category.id === id)?.spent ?? 0);
+  const byPerson = new Map<string, number>();
+  for (const p of w.purchases) if (p.by) byPerson.set(p.by, (byPerson.get(p.by) ?? 0) + p.amount);
   const current = offset === 0;
   const left = w.budget - w.spent;
   const daysLeft = Math.round((Date.parse(w.end) - Date.parse(x.today)) / 864e5);
@@ -38,7 +46,7 @@ export function Spending() {
           <div className="title-row">
             <h1>Spending</h1>
             <HelpTip label="How Spending works">
-              Each bucket is money for one kind of spending each week. Tap a bucket's <b>+</b> to log a purchase into it, or the bucket itself to see its purchases. Bills that leave the bank this week are listed too, so the whole week is in one place.
+              Each bucket is money for one kind of spending each week. Tap a bucket's <b>+</b> to log a purchase into it, or the bucket itself to see its purchases. Swipe a purchase right to edit it or left to delete it. Bills that leave the bank this week are listed too, so the whole week is in one place.
             </HelpTip>
           </div>
           <div className="sub">Weekly buckets · weeks start {new Date(`${w.start}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}</div>
@@ -104,6 +112,11 @@ export function Spending() {
             </div>
             <div style={{ margin: '10px 0 18px' }}>
               <Bar value={w.budget ? w.spent / w.budget : 0} tone={left < 0 ? 'warn' : undefined} />
+              {byPerson.size > 1 && (
+                <div className="faint" style={{ fontSize: 12.5, marginTop: 6 }}>
+                  {[...byPerson].map(([name, amt]) => `${name} ${money(amt)}`).join(' · ')}
+                </div>
+              )}
             </div>
             <WeekBars weeks={weeks} budget={w.budget} onPick={(i) => setOffset(offset + i - 5)} />
           </div>
@@ -112,8 +125,11 @@ export function Spending() {
             <h3>Buckets</h3>
             {w.byCategory.length ? (
               <ul className="list">
-                {w.byCategory.map(({ category: c, budget, spent }) => {
+                {w.byCategory.map(({ category: c, budget, carried, spent }) => {
                   const over = spent > budget;
+                  const t = trend(c.id);
+                  const past = t.slice(0, 7);
+                  const avg = past.some((v) => v > 0) ? Math.round(past.reduce((a, b) => a + b, 0) / past.length) : null;
                   return (
                     <li key={c.id} className={focus === c.id ? 'picked' : ''}>
                       <button className="rowbtn" onClick={() => setFocus(focus === c.id ? null : c.id)} aria-pressed={focus === c.id} aria-label={`${c.name}: show its purchases`}>
@@ -127,8 +143,17 @@ export function Spending() {
                           <div style={{ margin: '7px 0 4px' }}>
                             <Bar value={budget ? spent / budget : 0} tone={over ? 'warn' : undefined} />
                           </div>
-                          <div className="sub">
-                            {money(spent)} of {money(budget)} a week
+                          <div className="row sub" style={{ gap: 8 }}>
+                            <span>
+                              {money(spent)} of {money(budget)}
+                              {carried ? ` · ${carried > 0 ? '+' : '−'}${money(Math.abs(carried), true)} carried` : ' a week'}
+                            </span>
+                            {avg !== null && (
+                              <span className="trend" title={`Average ${money(avg)} a week over the last 7 weeks`}>
+                                <Spark values={t} />
+                                avg {money(avg, true)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </button>
@@ -174,19 +199,20 @@ export function Spending() {
             </h3>
             {purchases.length ? (
               <ul className="list">
-                {purchases.map((p) => (
-                  <li key={p.id}>
-                    <button className="rowbtn" onClick={() => ui.open(<SpendingSheet id={p.id} />)}>
-                      <div className="grow">
-                        <div style={{ fontWeight: 600 }}>{p.note || live(data.categories).find((c) => c.id === p.categoryId)?.name || 'Spending'}</div>
-                        <div className="sub">
-                          {[p.note && (live(data.categories).find((c) => c.id === p.categoryId)?.name ?? 'Other'), weekdayDate(p.date)].filter(Boolean).join(' · ')}
+                {purchases.map((p) => {
+                  const bucket = live(data.categories).find((c) => c.id === p.categoryId)?.name;
+                  return (
+                    <SwipeRow key={p.id} label="Edit" className="edit" onSwipe={() => ui.open(<SpendingSheet id={p.id} />)} leftLabel="Delete" onSwipeLeft={() => removeWithUndo('spending', p.id, money(p.amount))}>
+                      <button className="rowbtn" onClick={() => ui.open(<SpendingSheet id={p.id} />)}>
+                        <div className="grow">
+                          <div style={{ fontWeight: 600 }}>{p.note || bucket || 'Spending'}</div>
+                          <div className="sub">{[p.note && (bucket ?? 'Other'), weekdayDate(p.date), p.by].filter(Boolean).join(' · ')}</div>
                         </div>
-                      </div>
-                      <span className="num">{money(p.amount)}</span>
-                    </button>
-                  </li>
-                ))}
+                        <span className="num">{money(p.amount)}</span>
+                      </button>
+                    </SwipeRow>
+                  );
+                })}
               </ul>
             ) : (
               <Empty>{current ? 'Nothing logged this week yet. Tap a bucket’s + after a purchase.' : 'Nothing logged this week.'}</Empty>
@@ -195,6 +221,19 @@ export function Spending() {
         </div>
       </div>
     </>
+  );
+}
+
+/** A bucket's spending over the last eight weeks as tiny bars; the last one is the week shown. */
+function Spark({ values }: { values: number[] }) {
+  const max = Math.max(1, ...values);
+  return (
+    <svg width={values.length * 5} height={14} aria-hidden="true" className="spark">
+      {values.map((v, i) => {
+        const h = Math.max(1.5, (v / max) * 14);
+        return <rect key={i} x={i * 5} y={14 - h} width={3.5} height={h} rx={1} className={i === values.length - 1 ? 'now' : ''} />;
+      })}
+    </svg>
   );
 }
 

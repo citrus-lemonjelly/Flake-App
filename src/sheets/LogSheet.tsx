@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { addDays, allPaydays, byId, hourlyTakeHome, live, weekRanges, weekSpending } from '../engine';
+import { addDays, allPaydays, byId, hourlyTakeHome, live, recentPurchases, weekRanges, weekSpending } from '../engine';
+import { getMe, setMe } from '../ui/me';
 import { logBonus, logSpending, recordPaycheck } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
@@ -28,6 +29,12 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
   const [note, setNote] = useState('');
   const [date, setDate] = useState(x.today);
   const [sourceId, setSourceId] = useState(hourly[0]?.id ?? '');
+  const people = data.household.people.filter((p) => p && p !== 'Me');
+  const [by, setBy] = useState<string | null>(() => {
+    const me = getMe();
+    return me && people.includes(me) ? me : people.length === 1 ? people[0]! : null;
+  });
+  const recents = cat ? recentPurchases(data, cat) : [];
   const cents = parseInt(digits || '0', 10);
   const hours = Number(digits || '0');
 
@@ -58,7 +65,8 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
   const save = () => {
     if (!ready) return;
     if (kind === 'spending') {
-      update((d) => logSpending(d, { date, amount: cents, categoryId: cat, note }));
+      update((d) => logSpending(d, { date, amount: cents, categoryId: cat, note, by: by ?? undefined }));
+      if (by) setMe(by);
       // Say where it landed.
       const budget = budgets.find((b) => b.c.id === cat);
       if (budget) {
@@ -104,6 +112,25 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
         {kind === 'hours' ? `${digits || '0'} hrs` : money(cents)}
       </div>
 
+      {kind === 'spending' && recents.length > 0 && (
+        <div className="chips recent-chips" aria-label="Recent">
+          {recents.map((r) => (
+            <button
+              key={`${r.note}|${r.amount}`}
+              className="chip"
+              aria-pressed={cents === r.amount && note === r.note}
+              onClick={() => {
+                setDigits(String(r.amount));
+                setNote(r.note);
+              }}
+            >
+              {r.note || 'Same as before'}
+              <small>{money(r.amount)}</small>
+            </button>
+          ))}
+        </div>
+      )}
+
       {kind === 'spending' && left !== undefined && (
         <p className="muted" style={{ textAlign: 'center', marginTop: -4 }}>
           {left - cents >= 0 ? `${money(left - cents)} left in ${bucket!.name} this week` : `${bucket!.name} would be ${money(cents - left)} over this week`}
@@ -138,6 +165,16 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
           </button>
         ))}
       </div>
+      {kind === 'spending' && people.length > 1 && (
+        <div className="who" role="radiogroup" aria-label="Who's logging this">
+          <span className="faint">Logged by</span>
+          {people.map((p) => (
+            <button key={p} className="chip" role="radio" aria-checked={by === p} aria-pressed={by === p} onClick={() => setBy(by === p ? null : p)}>
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
       {kind !== 'hours' && (
         <div style={{ marginTop: 14 }}>
           <DateField label="Date" value={date} onChange={setDate} />
