@@ -139,3 +139,73 @@ export function totalsTo(flow: MonthFlow, i: number): { in: number; out: number 
   for (let k = 0; k <= i; k++) (a += flow.days[k]!.in), (b += flow.days[k]!.out);
   return { in: a, out: b };
 }
+
+/**
+ * The checking balance from today forward, a day at a time. The lowest point is
+ * marked; below $0 gets a warning line. Point at a day to read it.
+ */
+export function BalanceLine({ days, lowIndex, day, onDay }: { days: { date: string; balance: number }[]; lowIndex: number; day: number | null; onDay: (i: number | null) => void }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(320);
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth || 320));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const n = days.length;
+  const W = width, H = 150, padL = 4, padR = 52, padT = 12, padB = 22;
+  const vals = days.map((d) => d.balance);
+  const hi = niceMax(Math.max(1, ...vals));
+  const lo = Math.min(0, ...vals);
+  const bottom = lo < 0 ? -niceMax(-lo) : 0;
+  const x = (i: number) => padL + (i / Math.max(1, n - 1)) * (W - padL - padR);
+  const y = (v: number) => padT + (1 - (v - bottom) / (hi - bottom)) * (H - padT - padB);
+  const line = vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  const area = `${line}L${x(n - 1)},${y(Math.max(0, bottom))}L${x(0)},${y(Math.max(0, bottom))}Z`;
+  const low = days[lowIndex]!;
+  const lowRight = x(lowIndex) > W - padR - 60;
+  return (
+    <div className="chart" ref={wrap}>
+      <svg
+        width={W}
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label={`Checking balance over the next ${n - 1} days: from ${money(vals[0]!, true)} to ${money(vals[n - 1]!, true)}, lowest ${money(low.balance, true)} on ${shortDate(low.date)}`}
+        style={{ touchAction: 'pan-y' }}
+        onPointerMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          const i = Math.round((((e.clientX - r.left) * (W / r.width) - padL) / (W - padL - padR)) * (n - 1));
+          onDay(i < 0 || i > n - 1 ? null : i);
+        }}
+        onPointerLeave={(e) => e.pointerType === 'mouse' && onDay(null)}
+      >
+        {[hi, hi / 2, 0, ...(bottom < 0 ? [bottom] : [])].map((t) => (
+          <g key={t}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke={t === 0 && bottom < 0 ? 'var(--bad)' : 'var(--line)'} strokeDasharray={t === 0 ? undefined : '3 4'} />
+            <text x={W - padR + 6} y={y(t) + 4} fontSize="11" fill={t === 0 && bottom < 0 ? 'var(--bad)' : 'var(--ink3)'}>
+              {money(t, true).replace(',000', 'k')}
+            </text>
+          </g>
+        ))}
+        <path d={area} fill="var(--accent)" opacity={0.1} />
+        <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={x(lowIndex)} cy={y(low.balance)} r={4.5} fill={low.balance < 0 ? 'var(--bad)' : 'var(--surface)'} stroke={low.balance < 0 ? 'var(--surface)' : 'var(--accent)'} strokeWidth={2} />
+        <text x={x(lowIndex) + (lowRight ? -6 : 6)} y={y(low.balance) + (y(low.balance) > H - padB - 14 ? -8 : 16)} fontSize="11" fontWeight="600" fill={low.balance < 0 ? 'var(--bad)' : 'var(--ink2)'} textAnchor={lowRight ? 'end' : 'start'}>
+          Low {money(low.balance, true)}
+        </text>
+        <circle cx={x(0)} cy={y(vals[0]!)} r={4.5} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />
+        <text x={padL} y={H - 5} fontSize="11" fontWeight="700" fill="var(--ink)">Today</text>
+        <text x={W - padR} y={H - 5} fontSize="11" fill="var(--ink3)" textAnchor="end">{shortDate(days[n - 1]!.date)}</text>
+        {day !== null && (
+          <>
+            <line x1={x(day)} x2={x(day)} y1={padT} y2={H - padB} stroke="var(--ink)" />
+            <circle cx={x(day)} cy={y(vals[day]!)} r={5} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />
+          </>
+        )}
+      </svg>
+    </div>
+  );
+}

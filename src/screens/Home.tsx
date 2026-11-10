@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { addDays, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
+import { addDays, balanceForecast, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import type { Derived } from '../state/derive';
@@ -13,7 +13,9 @@ import { confirmStep, guideSteps, setGuide, type GuideStep, type GuideStepId } f
 import { LogSheet } from '../sheets/LogSheet';
 import { PaySheet } from '../sheets/PaySheet';
 import { ScreenTip } from '../ui/ScreenTip';
-import { MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
+import { Icon } from '../ui/icons';
+import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
+import { BalanceSheet } from '../sheets/BalanceSheet';
 import { Tick, useBillActions } from '../ui/billActions';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
@@ -44,7 +46,6 @@ export function basisText(x: Derived, extra: number): string {
 export function Home() {
   const data = useData();
   const x = useDerived();
-  const ui = useUI();
   const name = data.household.people[0] ?? 'there';
   const nextPay = x.nextPaydays[0];
 
@@ -58,11 +59,6 @@ export function Home() {
             {nextPay && ` · next pay ${weekdayShort(nextPay.payday)}`}
           </div>
         </div>
-        <div className="actions">
-          <button className="btn small" onClick={() => ui.open(<LogSheet />)}>
-            + Log spending
-          </button>
-        </div>
       </header>
 
       <ScreenTip id="home2">
@@ -73,6 +69,7 @@ export function Home() {
         <div className="stack">
           <GettingStarted />
           <LeftOver />
+          <BalanceCard />
           <FlowCard />
         </div>
         <div className="stack">
@@ -258,6 +255,106 @@ function LeftOver() {
   );
 }
 
+/**
+ * Checking: the last balance typed in, carried to today with everything logged
+ * since, then projected a month ahead with paydays, bills, set-asides and buckets.
+ */
+function BalanceCard() {
+  const data = useData();
+  const x = useDerived();
+  const ui = useUI();
+  const [day, setDay] = useState<number | null>(null);
+  const f = useMemo(() => balanceForecast(data, x.today, 30), [data, x.today]);
+
+  if (!f)
+    return (
+      <div className="card">
+        <h3>Bank balance</h3>
+        <p className="muted" style={{ margin: '0 0 12px', fontSize: 14 }}>
+          Type in what's in checking to see where it's headed over the next month, with your pay, bills, set-asides and spending.
+        </p>
+        <button className="btn small" onClick={() => ui.open(<BalanceSheet />)}>
+          Add balance
+        </button>
+      </div>
+    );
+
+  const lowIndex = f.days.findIndex((d) => d.date === f.low.date);
+  const monthEnd = f.days.find((d, i) => i < f.days.length - 1 && d.date.slice(0, 7) !== f.days[i + 1]!.date.slice(0, 7));
+  const payday = x.nextPaydays[0] && f.days.find((d) => d.date === x.nextPaydays[0]!.payday);
+  const sel = day === null ? null : f.days[day]!;
+  const typedToday = f.entry.date === x.today && f.inSince === 0 && f.outSince === 0;
+
+  return (
+    <div className="card balance">
+      <h3>
+        Bank balance
+        <button className="link" onClick={() => ui.open(<BalanceSheet />)}>
+          Update
+        </button>
+      </h3>
+      <div className="row" style={{ alignItems: 'baseline', marginTop: -6 }}>
+        <span className={`num big-num ${f.now < 0 ? 'over' : ''}`}>{f.now < 0 ? '−' : ''}{money(Math.abs(f.now))}</span>
+        <span className="faint" style={{ fontSize: 12 }}>{typedToday ? 'today' : 'now (estimated)'}</span>
+      </div>
+      <div className="muted" style={{ fontSize: 13 }}>
+        {typedToday ? (
+          'Typed in today'
+        ) : (
+          <>
+            <span className="nowrap">From {money(f.entry.balance)} on {shortDate(f.entry.date)}</span>
+            {f.inSince > 0 && <span className="nowrap"> · +{money(f.inSince)} in</span>}
+            {f.outSince > 0 && <span className="nowrap"> · −{money(f.outSince)} out</span>}
+          </>
+        )}
+      </div>
+      <div className="flow-readout" aria-live="polite" style={{ marginTop: 12 }}>
+        {sel ? (
+          <>
+            <b>
+              {weekdayDate(sel.date)}: {sel.balance < 0 ? '−' : ''}
+              {money(Math.abs(sel.balance))}
+            </b>
+            <div>{[sel.in > 0 && `+${money(sel.in)} in`, sel.out > 0 && `−${money(sel.out)} out`].filter(Boolean).join(' · ') || 'Nothing planned that day'}</div>
+          </>
+        ) : (
+          <>
+            <b>The next 30 days</b>
+            <div>Point at a day to see the balance then.</div>
+          </>
+        )}
+      </div>
+      <BalanceLine days={f.days} lowIndex={lowIndex} day={day} onDay={setDay} />
+      <div className="bal-tiles">
+        <div className={f.low.balance < 0 ? 'bad' : ''}>
+          <span>Lowest</span>
+          <b>{money(f.low.balance, true)}</b>
+          <small>{f.low.date === x.today ? 'today' : weekdayDate(f.low.date)}</small>
+        </div>
+        {payday && (
+          <div>
+            <span>After next payday</span>
+            <b>{money(payday.balance, true)}</b>
+            <small>{weekdayDate(payday.date)}</small>
+          </div>
+        )}
+        {monthEnd && (
+          <div>
+            <span>End of {monthName(monthEnd.date)}</span>
+            <b>{money(monthEnd.balance, true)}</b>
+            <small>{shortDate(monthEnd.date)}</small>
+          </div>
+        )}
+      </div>
+      {f.low.balance < 0 && (
+        <div className="notice" style={{ marginTop: 12 }}>
+          Checking is on track to dip below $0 on {weekdayDate(f.low.date)}. Moving a bill, a set-aside or some spending past the next payday would cover it.
+        </div>
+      )}
+    </div>
+  );
+}
+
 const monthName = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
 
 /** Money in vs money out: six months of bars, or this month as running lines. */
@@ -432,22 +529,27 @@ function ThisWeek() {
           </div>
           <div className="cat-tiles">
             {w.byCategory.map((c) => (
-              <button key={c.category.id} onClick={() => ui.go('spending', { categoryId: c.category.id })}>
-                <b>{c.category.name}</b>
-                <small className={c.spent > c.budget ? 'over' : ''}>
-                  {money(c.spent, true)} of {money(c.budget, true)}
-                  {c.spent > c.budget && ' · over'}
-                </small>
-                <Bar value={c.budget ? c.spent / c.budget : 0} tone={c.spent > c.budget ? 'warn' : undefined} />
-              </button>
+              <div key={c.category.id} className="tile">
+                <button className="tile-main" onClick={() => ui.go('spending', { categoryId: c.category.id })} aria-label={`${c.category.name}: ${money(c.spent)} of ${money(c.budget)} this week`}>
+                  <b>{c.category.name}</b>
+                  <small className={c.spent > c.budget ? 'over' : ''}>
+                    {money(c.spent, true)} of {money(c.budget, true)}
+                    {c.spent > c.budget && ' · over'}
+                  </small>
+                  <Bar value={c.budget ? c.spent / c.budget : 0} tone={c.spent > c.budget ? 'warn' : undefined} />
+                </button>
+                <button className="add-btn" aria-label={`Log ${c.category.name} spending`} onClick={() => ui.open(<LogSheet categoryId={c.category.id} />)}>
+                  <Icon name="plus" size={16} stroke={2.4} />
+                </button>
+              </div>
             ))}
           </div>
         </>
       ) : (
         <div className="empty">
-          No budgets yet.{' '}
+          No spending buckets yet.{' '}
           <button className="link" onClick={() => ui.open(<CategorySheet />)}>
-            Add one
+            Make one
           </button>
         </div>
       )}

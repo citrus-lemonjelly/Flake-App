@@ -12,6 +12,27 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.15.0',
+    date: '2026-11-10',
+    title: 'Bank balance, now and ahead',
+    items: [
+      'Home has a Bank balance card: type in what’s in checking and Flake carries it forward with your pay, bills, set-asides and what you log in each bucket.',
+      'A chart shows the next 30 days, with the lowest point, the balance after the next payday and at the end of the month. Point at a day to read it.',
+      'If checking is headed below $0, Home says when.',
+      'Extra debt payments and money moved into savings goals now count as money out.',
+    ],
+  },
+  {
+    version: '0.14.0',
+    date: '2026-11-10',
+    title: 'Spending buckets',
+    items: [
+      'Spending is a set of weekly buckets, like Groceries, Gas, Eating out, Clothes or Other. Make one with + New bucket; common ones are a tap away.',
+      'Each bucket has its own + to log a purchase straight into it, on Spending and on Home. The general Log spending button is gone.',
+      'Other money in and hourly hours are logged from Log pay on Home.',
+    ],
+  },
+  {
     version: '0.13.1',
     date: '2026-11-10',
     title: 'Totals on the Bills page',

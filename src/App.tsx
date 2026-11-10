@@ -13,7 +13,6 @@ import { Bills } from './screens/Bills';
 import { Spending } from './screens/Spending';
 import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
-import { LogSheet } from './sheets/LogSheet';
 import { CelebrateSheet } from './sheets/InfoSheets';
 import { SyncSheet } from './sheets/SyncSheet';
 import { ProfileSheet } from './sheets/ProfileSheet';
@@ -94,9 +93,6 @@ function Shell() {
             {n.desk}
           </button>
         ))}
-        <button className="btn cta" onClick={() => ui.open(<LogSheet />)}>
-          <Icon name="plus" size={18} stroke={2.4} /> Log spending
-        </button>
         <div className="side-bottom">
           <ThemeQuick />
           <button className="foot link" style={{ textAlign: 'left', color: 'var(--ink3)', fontWeight: 500 }} onClick={() => ui.open(<SyncSheet />)}>

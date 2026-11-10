@@ -524,17 +524,32 @@ export function PaycheckSheet({ sourceId, payday, focus }: { sourceId: string; p
   );
 }
 
-export function CategorySheet({ id }: { id?: string }) {
+/** Common spending buckets, offered as one-tap names when making a new one. */
+export const BUCKET_IDEAS = ['Groceries', 'Gas', 'Eating out', 'Clothes', 'Household', 'Fun money', 'Kids', 'Pets', 'Gifts', 'Other'];
+
+/** A spending bucket: money for one kind of spending each week, logged into with its own +. */
+export function CategorySheet({ id, name: startName }: { id?: string; name?: string }) {
   const data = useData();
   const removeWithUndo = useRemoveWithUndo();
   const update = useUpdate();
   const existing = id ? byId(data.categories, id) : undefined;
-  // Budgets are weekly; an older per-paycheck or monthly one is converted when it's saved.
-  const [c, set] = useDraft<Category>(() => (existing ? { ...existing, cadence: 'weekly', amount: weeklyAmount(data, existing) } : entity<Category>({ name: '', amount: 0, cadence: 'weekly' })));
+  // Buckets are weekly; an older per-paycheck or monthly one is converted when it's saved.
+  const [c, set] = useDraft<Category>(() => (existing ? { ...existing, cadence: 'weekly', amount: weeklyAmount(data, existing) } : entity<Category>({ name: startName ?? '', amount: 0, cadence: 'weekly' })));
+  const taken = new Set(live(data.categories).map((x) => x.name.trim().toLowerCase()));
+  const ideas = BUCKET_IDEAS.filter((n) => !taken.has(n.toLowerCase()));
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a spending budget'} canSave={c.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'categories', c))} onDelete={existing ? () => removeWithUndo('categories', existing.id, existing.name) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'New spending bucket'} canSave={c.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'categories', c))} onDelete={existing ? () => removeWithUndo('categories', existing.id, existing.name) : undefined}>
+      {!existing && ideas.length > 0 && (
+        <div className="chips" style={{ justifyContent: 'flex-start' }} aria-label="Ideas">
+          {ideas.map((n) => (
+            <button key={n} className="chip" aria-pressed={c.name === n} onClick={() => set({ name: n })}>
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
       <TextField label="Name" value={c.name} onChange={(name) => set({ name })} placeholder="e.g. Groceries" />
-      <MoneyField label="Per week" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} hint={`Weeks start on ${WEEKDAYS[data.household.weekStartsOn]}. Change that in Settings.`} />
+      <MoneyField label="Per week" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} hint={`What you usually spend, or could spend, each week. Weeks start on ${WEEKDAYS[data.household.weekStartsOn]}.`} />
     </EditFrame>
   );
 }

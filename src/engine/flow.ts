@@ -1,4 +1,4 @@
-import type { AppData, Category, Cents, Id, ISODate, Spending } from '../model/types';
+import { loggedAt, type AppData, type BalanceCheckIn, type Category, type Cents, type Id, type ISODate, type Spending } from '../model/types';
 import { addDays, addMonths, daysBetween, makeDate, yearMonth } from './dates';
 import { live } from './live';
 import { sum } from './money';
@@ -83,8 +83,35 @@ export function monthFlow(data: AppData, monthStart: ISODate, today: ISODate): M
   const { year, month1 } = yearMonth(monthStart);
   const start = makeDate(year, month1, 1);
   const end = addDays(addMonths(start, 1), -1);
-  const n = daysBetween(start, end) + 1;
+  const { days, bills, spending } = dailyFlow(data, start, end, today);
+  const inTotal = sum(days.map((d) => d.in));
+  const outTotal = sum(days.map((d) => d.out));
+  const past = days.filter((d) => d.date <= today);
+  return {
+    start,
+    end,
+    days,
+    inTotal,
+    outTotal,
+    inSoFar: sum(past.map((d) => d.in)),
+    outSoFar: sum(past.map((d) => d.out)),
+    bills,
+    spending,
+    left: inTotal - outTotal,
+  };
+}
+
+/**
+ * Money in and out for each day in [start, end]. In: paychecks and other money
+ * received. Out: bills and payments on the day they leave, set-asides, extra debt
+ * payments and money moved to savings goals, and spending:
+ * what was logged up to today, then the weekly buckets (what's left of this week's,
+ * then a full week's) spread over the days to come.
+ */
+export function dailyFlow(data: AppData, start: ISODate, end: ISODate, today: ISODate): { days: FlowDay[]; bills: Cents; spending: Cents } {
+  const n = Math.max(0, daysBetween(start, end) + 1);
   const days: FlowDay[] = Array.from({ length: n }, (_, i) => ({ date: addDays(start, i), in: 0, out: 0 }));
+  if (!n) return { days, bills: 0, spending: 0 };
   const at = (d: ISODate) => days[daysBetween(start, d)];
 
   for (const p of allPaydays(data, start, end)) at(p.payday)!.in += p.amount;
@@ -102,7 +129,12 @@ export function monthFlow(data: AppData, monthStart: ISODate, today: ISODate): M
       spending += s.amount;
     }
 
-  // The budgets still to come, a day at a time.
+  // Extra debt payments and money moved into savings goals (minimum payments are already bills).
+  for (const p of live(data.debtPayments)) if (p.kind === 'extra' && p.date >= start && p.date <= end && p.date <= today) at(p.date)!.out += p.amount;
+  for (const a of live(data.allocations))
+    if (a.status === 'done' && a.target.type === 'fund' && a.doneOn && a.doneOn >= start && a.doneOn <= end && a.doneOn <= today) at(a.doneOn)!.out += a.amount;
+
+  // The buckets still to come, a day at a time.
   const weekly = weeklyBudget(data);
   if (weekly > 0 && end > today) {
     const [thisWeek] = weekRanges(data, today, 1);
@@ -117,22 +149,49 @@ export function monthFlow(data: AppData, monthStart: ISODate, today: ISODate): M
       spending += c;
     }
   }
+  return { days, bills, spending };
+}
 
-  const inTotal = sum(days.map((d) => d.in));
-  const outTotal = sum(days.map((d) => d.out));
-  const past = days.filter((d) => d.date <= today);
-  return {
-    start,
-    end,
-    days,
-    inTotal,
-    outTotal,
-    inSoFar: sum(past.map((d) => d.in)),
-    outSoFar: sum(past.map((d) => d.out)),
-    bills,
-    spending,
-    left: inTotal - outTotal,
-  };
+/** The checking balance: the last one typed in, carried to today, then projected ahead. */
+export interface BalanceForecast {
+  entry: BalanceCheckIn;
+  /** Money in and out between the balance being typed in and today. */
+  inSince: Cents;
+  outSince: Cents;
+  now: Cents;
+  /** Today, then each day ahead: the balance at the end of that day. */
+  days: { date: ISODate; balance: Cents; in: Cents; out: Cents }[];
+  low: { date: ISODate; balance: Cents };
+}
+
+/** The most recent balance typed in (the latest date; the latest entry on that date). */
+export function lastBalance(data: AppData): BalanceCheckIn | null {
+  return live(data.checkIns).sort((a, b) => a.date.localeCompare(b.date) || loggedAt(a).localeCompare(loggedAt(b))).pop() ?? null;
+}
+
+/**
+ * Where checking stands today and where it's headed over the next `ahead` days.
+ * The balance typed in already includes that day's paychecks and bills, and any
+ * spending logged before it was typed; everything after is added or taken off.
+ */
+export function balanceForecast(data: AppData, today: ISODate, ahead = 30): BalanceForecast | null {
+  const entry = lastBalance(data);
+  if (!entry || entry.date > today) return null;
+  const since = dailyFlow(data, addDays(entry.date, 1), today, today).days;
+  // Spending on the same day, logged after the balance was typed in.
+  const sameDay = sum(live(data.spending).filter((s) => s.date === entry.date && loggedAt(s) > loggedAt(entry)).map((s) => s.amount));
+  const inSince = sum(since.map((d) => d.in));
+  const outSince = sum(since.map((d) => d.out)) + sameDay;
+  const now = entry.balance + inSince - outSince;
+
+  let bal = now;
+  const days = [{ date: today, balance: now, in: 0, out: 0 }];
+  for (const d of dailyFlow(data, addDays(today, 1), addDays(today, ahead), today).days) {
+    bal += d.in - d.out;
+    days.push({ date: d.date, balance: bal, in: d.in, out: d.out });
+  }
+  const low = days.reduce((m, d) => (d.balance < m.balance ? d : m), days[0]!);
+  return { entry, inSince, outSince, now, days, low: { date: low.date, balance: low.balance } };
 }
 
 /** Month flows from `back` months ago to `ahead` months ahead (this month included). */
