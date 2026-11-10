@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { byId, debtMonthlyPayment, weeklyAmount, expectedPay, hourlyTakeHome, live, paycheckRecord, splitEvenly, today } from '../engine';
+import { byId, debtMonthlyPayment, weeklyAmount, paychecksPerYear, expectedPay, hourlyTakeHome, live, paycheckRecord, splitEvenly, today } from '../engine';
 import { entity } from '../model/factory';
 import type { AppData, Bill, Category, Cents, Debt, DebtKind, Fund, HourlyPay, IncomeSource, PaidOn, PaySchedule, SavePart } from '../model/types';
 import { logDebtPayment, recordPaycheck, setDebtBalance, upsert } from '../store/actions';
@@ -178,7 +178,8 @@ export function DebtSheet({ id }: { id?: string }) {
       )}
       <PartsField total={monthly} parts={d.parts} onChange={(parts) => set({ parts })} what={isMortgage ? 'the payment' : 'it'} />
       {d.parts && d.dueDay === null && <p className="over" style={{ fontSize: 13, marginTop: -6 }}>Pick a due day so Flake knows which month each part saves for.</p>}
-      {!d.parts && <TimingField value={d.paidOn} onChange={(paidOn) => set({ paidOn })} />}
+      <AutopayField on={!!d.autoTick} onChange={(on) => set({ autoTick: on, autoTickSince: on ? (d.autoTickSince ?? x.today) : d.autoTickSince })} />
+      {!d.parts && !d.autoTick && <TimingField value={d.paidOn} onChange={(paidOn) => set({ paidOn })} />}
       <Toggle label="Include in the payoff plan" hint={isMortgage ? 'Usually off: extra money goes to higher-rate debts first.' : 'Extra money from the pot can go here.'} checked={d.includeInPlan} onChange={(includeInPlan) => set({ includeInPlan })} />
     </EditFrame>
   );
@@ -226,36 +227,73 @@ export function PaymentSheet({ debtId, mode }: { debtId: string; mode: 'pay' | '
 // Bills, paychecks, budgets, funds
 // ---------------------------------------------------------------------------
 
+const REPEATS = [
+  { value: '1', label: 'Every month' },
+  { value: '3', label: 'Every 3 months' },
+  { value: '6', label: 'Every 6 months' },
+  { value: '12', label: 'Every year' },
+];
+
 export function BillSheet({ id }: { id?: string }) {
   const data = useData();
+  const x = useDerived();
   const removeWithUndo = useRemoveWithUndo();
   const update = useUpdate();
   const owners = useOwners();
   const existing = id ? byId(data.bills, id) : undefined;
-  const [b, set] = useDraft<Bill>(() => existing ?? entity<Bill>({ name: '', amount: 0, dueDay: 1, funding: 'due-date', owner: 'joint', autopay: true }));
+  const [b, set] = useDraft<Bill>(() => existing ?? entity<Bill>({ name: '', amount: 0, dueDay: 1, funding: 'due-date', owner: 'joint', autopay: false }));
+  const every = b.every && b.every > 1 ? b.every : 1;
+  const anchor = b.anchor ?? x.today;
+  // Roughly what one paycheck puts aside for a bill due every few months.
+  const payAnchor = live(data.incomes).find((s) => s.anchorsPayPeriod);
+  const perYear = payAnchor ? paychecksPerYear(payAnchor.schedule) : 12;
+  const perPaycheck = Math.round(b.amount / Math.max(1, Math.round((perYear * every) / 12)));
+  const save = () =>
+    update((d) =>
+      upsert(d, 'bills', {
+        ...b,
+        every: every > 1 ? every : undefined,
+        anchor: every > 1 ? anchor : undefined,
+        dueDay: every > 1 ? Number(anchor.slice(8)) : b.dueDay,
+        parts: every > 1 ? undefined : b.parts,
+        savePerPaycheck: every > 1 ? b.savePerPaycheck : undefined,
+        autopay: !!b.autoTick,
+      }),
+    );
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a bill'} canSave={b.name.trim() !== '' && partsOk(b.parts, b.amount)} onSave={() => update((d) => upsert(d, 'bills', b))} onDelete={existing ? () => removeWithUndo('bills', existing.id, existing.name) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'Add a bill'} canSave={b.name.trim() !== '' && (every > 1 || partsOk(b.parts, b.amount))} onSave={save} onDelete={existing ? () => removeWithUndo('bills', existing.id, existing.name) : undefined}>
       <div className="form-grid">
         <div className="full">
           <TextField label="Name" value={b.name} onChange={(name) => set({ name })} placeholder="e.g. Power" />
         </div>
-        <MoneyField label="Amount per month" value={b.amount} onChange={(amount) => set({ amount: amount ?? 0 })} />
-        <SelectField label="Due day" value={String(b.dueDay)} options={dayOptions} onChange={(v) => set({ dueDay: Number(v) })} />
-        <SelectField
-          label="Paid from"
-          value={b.funding}
-          options={[
-            { value: 'due-date', label: 'The paycheck before it’s due' },
-            { value: 'split', label: 'Split across paychecks' },
-          ]}
-          onChange={(funding) => set({ funding })}
-        />
+        <MoneyField label={every > 1 ? 'Amount each time' : 'Amount per month'} value={b.amount} onChange={(amount) => set({ amount: amount ?? 0 })} />
+        <SelectField label="Repeats" value={String(every)} options={REPEATS} onChange={(v) => set({ every: Number(v), anchor: Number(v) > 1 ? anchor : b.anchor })} />
+        {every > 1 ? (
+          <DateField label="Next due" value={anchor} onChange={(d) => set({ anchor: d })} />
+        ) : (
+          <SelectField label="Due day" value={String(b.dueDay)} options={dayOptions} onChange={(v) => set({ dueDay: Number(v) })} />
+        )}
         <SelectField label="Whose" value={b.owner} options={owners} onChange={(owner) => set({ owner })} />
       </div>
-      <PartsField total={b.amount} parts={b.parts} onChange={(parts) => set({ parts })} what="it" />
-      {!b.parts && <TimingField value={b.paidOn} onChange={(paidOn) => set({ paidOn, autopay: paidOn === 'due-date' })} />}
+      <AutopayField on={!!b.autoTick} onChange={(on) => set({ autoTick: on, autoTickSince: on ? (b.autoTickSince ?? x.today) : b.autoTickSince })} />
+      {every > 1 ? (
+        <Toggle
+          label="Save for it from each paycheck"
+          hint={b.amount ? `About ${money(perPaycheck)} set aside from each paycheck into its bucket, so it's all there when it's due.` : 'An even share set aside from each paycheck into its bucket.'}
+          checked={!!b.savePerPaycheck}
+          onChange={(savePerPaycheck) => set({ savePerPaycheck })}
+        />
+      ) : (
+        <PartsField total={b.amount} parts={b.parts} onChange={(parts) => set({ parts })} what="it" />
+      )}
+      {!b.parts && !b.savePerPaycheck && !b.autoTick && <TimingField value={b.paidOn} onChange={(paidOn) => set({ paidOn })} />}
     </EditFrame>
   );
+}
+
+/** Autopay: the bill ticks itself off on its due date, and the app says so next time it opens. */
+function AutopayField({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return <Toggle label="Autopay" hint="Ticks itself off as paid on the due date. Flake shows you what it ticked off the next time you open the app." checked={on} onChange={onChange} />;
 }
 
 const partsOk = (parts: SavePart[] | undefined, total: Cents) => !parts || parts.reduce((s, p) => s + p.amount, 0) === total;

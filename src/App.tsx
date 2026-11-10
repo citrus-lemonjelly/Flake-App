@@ -4,7 +4,10 @@ import { live } from './engine';
 import { setGuide } from './guide';
 import { replaceEverything } from './store/actions';
 import { importJson } from './store/storage';
-import { useData, useStore, useThemeSync } from './state/store';
+import { useData, useStore, useThemeSync, useToday } from './state/store';
+import { autoTickDue } from './engine';
+import { autoTickBills } from './store/actions';
+import { AutopaySheet } from './sheets/AutopaySheet';
 import { UIProvider, useUI, type Route } from './state/ui';
 import { Icon, type IconName } from './ui/icons';
 import { ThemeQuick } from './ui/ThemeQuick';
@@ -75,10 +78,30 @@ function usePayoffCelebration() {
   }, [data.debts, ui]);
 }
 
+/**
+ * Autopay: when the app opens (or a new day starts while it's open), tick off autopay
+ * bills that have come due, and say so right away with a chance to undo each.
+ */
+function useAutopay() {
+  const store = useStore();
+  const ui = useUI();
+  const today = useToday();
+  const ran = useRef<string | null>(null);
+  useEffect(() => {
+    if (ran.current === today) return;
+    ran.current = today;
+    const due = autoTickDue(store.get(), today);
+    if (!due.length) return;
+    store.update((d) => autoTickBills(d, due.map((o) => ({ itemKind: o.item.itemKind, itemId: o.item.itemId, dueDate: o.dueDate, planned: o.planned }))));
+    ui.open(<AutopaySheet items={due} />);
+  }, [today, store, ui]);
+}
+
 function Shell() {
   const ui = useUI();
   const syncStatus = useSyncStatus();
   usePayoffCelebration();
+  useAutopay();
   const screen = { home: <Home />, bills: <Bills />, spending: <Spending />, debt: <Progress />, settings: <Settings /> }[ui.route];
   return (
     <div className="shell">

@@ -119,21 +119,46 @@ export function recordBillPayment(data: AppData, p: { itemKind: 'bill' | 'debt';
   return upsert(data, 'billPayments', entity<BillPayment>({ itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: p.paidOn, amount: p.amount ?? null }));
 }
 
+type Occurrence = { itemKind: 'bill' | 'debt'; itemId: Id; dueDate: ISODate };
+const findPayment = (data: AppData, p: Occurrence) =>
+  data.billPayments.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate);
+
 /**
  * Mark one month's bill or debt payment paid (or not). Paid ahead of plan, it's dated today;
- * otherwise it keeps its planned date. Unmarking removes the record, so it goes back to plan.
+ * otherwise it keeps its planned date. Unmarking goes back to plan, but keeps a changed
+ * amount, and remembers that an autopay tick was undone so it isn't ticked again.
  */
-export function markBillPaid(
-  data: AppData,
-  p: { itemKind: 'bill' | 'debt'; itemId: Id; dueDate: ISODate; planned: ISODate; today: ISODate },
-  paid: boolean,
-): AppData {
-  const existing = data.billPayments.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate);
-  if (!paid) return existing ? remove(data, 'billPayments', existing.id) : data;
+export function markBillPaid(data: AppData, p: Occurrence & { planned: ISODate; today: ISODate }, paid: boolean): AppData {
+  const existing = findPayment(data, p);
+  if (!paid) {
+    if (!existing) return data;
+    if (existing.amount === null && !existing.auto && !existing.autoSkip) return remove(data, 'billPayments', existing.id);
+    return patch(data, 'billPayments', existing.id, { paid: false, paidOn: p.planned, ...(existing.auto && { auto: false, autoSkip: true }) });
+  }
   const paidOn = p.today < p.planned ? p.today : p.planned;
-  const next = recordBillPayment(data, { itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: existing?.paidOn ?? paidOn });
-  const rec = next.billPayments.find((r) => !r.deletedAt && r.itemKind === p.itemKind && r.itemId === p.itemId && r.dueDate === p.dueDate)!;
-  return patch(next, 'billPayments', rec.id, { paid: true });
+  const next = recordBillPayment(data, { itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: existing?.paid ? existing.paidOn : paidOn });
+  return patch(next, 'billPayments', findPayment(next, p)!.id, { paid: true, autoSkip: false });
+}
+
+/** Autopay: tick these off as paid on their planned dates, marked as done automatically. */
+export function autoTickBills(data: AppData, list: (Occurrence & { planned: ISODate })[]): AppData {
+  let next = data;
+  for (const o of list) {
+    next = recordBillPayment(next, { itemKind: o.itemKind, itemId: o.itemId, dueDate: o.dueDate, paidOn: o.planned });
+    next = patch(next, 'billPayments', findPayment(next, o)!.id, { paid: true, auto: true });
+  }
+  return next;
+}
+
+/** This month's amount for a bill that changes (null goes back to the usual amount). */
+export function setBillAmount(data: AppData, p: Occurrence & { planned: ISODate }, amount: Cents | null): AppData {
+  const existing = findPayment(data, p);
+  if (existing) {
+    if (amount === null && !existing.paid && !existing.autoSkip) return remove(data, 'billPayments', existing.id);
+    return patch(data, 'billPayments', existing.id, { amount });
+  }
+  if (amount === null) return data;
+  return recordBillPayment(data, { itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: p.planned, amount });
 }
 
 /** Mark one part of a bill saved for in parts as set aside into its bucket (or undo it). */

@@ -17,6 +17,7 @@ import { Icon } from '../ui/icons';
 import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
 import { BalanceSheet } from '../sheets/BalanceSheet';
 import { Tick, useBillActions } from '../ui/billActions';
+import { SwipeRow } from '../ui/Swipe';
 import { useCountUp } from '../ui/motion';
 
 /** "Sam's Card" → "Sam's" keeps segment labels short. */
@@ -205,7 +206,7 @@ function LeftOver() {
   const [m] = useMemo(() => monthFlows(data, x.today, 0, 0), [data, x.today]);
   const flow = m!;
   const buckets = billItems(data)
-    .filter((i) => i.parts)
+    .filter((i) => i.saves)
     .map((i) => ({ item: i, balance: bucketBalance(data, i) }));
   const share = flow.inTotal > 0 ? Math.min(1, flow.outTotal / flow.inTotal) : 1;
   const left = useCountUp(flow.left);
@@ -430,10 +431,10 @@ function DueSoon() {
   const act = useBillActions();
   const from = addDays(x.today, -7), to = addDays(x.today, 14);
   const bills: DueItem[] = billsDue(data, from, addDays(to, 31))
-    .filter((o) => !o.paid && !o.item.parts && o.payDate >= from && o.payDate <= to)
+    .filter((o) => !o.paid && !o.item.saves && o.payDate >= from && o.payDate <= to)
     .map((o) => ({ kind: 'bill', date: o.payDate, o }));
   const parts: DueItem[] = billItems(data)
-    .filter((i) => i.parts)
+    .filter((i) => i.saves)
     .flatMap((item) => {
       const dues = [savingFor(data, item, x.today), savingFor(data, item, addDays(x.today, 14))];
       return [...new Set(dues)].flatMap((dueDate) => {
@@ -468,23 +469,24 @@ function DueSoon() {
         <ul className="list">
           {items.map((it) =>
             it.kind === 'bill' ? (
-              <li key={`b${it.o.item.itemId}${it.o.dueDate}`}>
+              <SwipeRow key={`b${it.o.item.itemId}${it.o.dueDate}`} label="Paid ✓" onSwipe={() => act.togglePaid(it.o)}>
                 <Tick done={false} label={`Mark ${it.o.item.name} paid`} onClick={() => act.togglePaid(it.o)} />
                 <div className="grow">
                   <div style={{ fontWeight: 600 }}>{it.o.item.name}</div>
                   <div className={`sub ${it.date <= addDays(x.today, 2) ? 'soon' : ''}`}>
-                    {when(it.date, it.o.item.timing === 'payday' ? 'Pay' : 'Due')}
+                    {when(it.date, it.o.item.timing === 'payday' && !it.o.item.autoTickSince ? 'Pay' : 'Due')}
                     {it.o.payDate !== it.o.dueDate && ` · due ${shortDate(it.o.dueDate)}`}
+                    {it.o.item.autoTickSince && ' · autopay'}
                   </div>
                 </div>
                 <span className="num">{money(it.o.amount)}</span>
-              </li>
+              </SwipeRow>
             ) : (
               <li key={`p${it.item.itemId}${it.dueDate}${it.p.index}`}>
                 <Tick done={false} label={`Mark ${it.item.name} part ${it.p.index + 1} set aside`} onClick={() => act.toggleSetAside(it.item, it.dueDate, it.p)} />
                 <div className="grow">
                   <div style={{ fontWeight: 600 }}>
-                    {it.item.name} · set aside {it.p.index + 1} of {it.of}
+                    {it.item.name} · set aside{!it.item.perPaycheck && ` ${it.p.index + 1} of ${it.of}`}
                   </div>
                   <div className={`sub ${it.date <= addDays(x.today, 2) ? 'soon' : ''}`}>{when(it.date, 'Payday')} · for {shortDate(it.dueDate)}</div>
                 </div>

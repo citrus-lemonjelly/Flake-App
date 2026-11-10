@@ -5,9 +5,11 @@ import { useUI } from '../state/ui';
 import { BillSheet } from '../sheets/EditSheets';
 import { Bar, Empty } from '../ui/components';
 import { Icon } from '../ui/icons';
-import { money, shortDate, weekdayDate } from '../ui/format';
+import { fullDate, money, shortDate, weekdayDate } from '../ui/format';
 import { HelpTip } from '../ui/ScreenTip';
 import { Tick, useBillActions } from '../ui/billActions';
+import { SwipeRow } from '../ui/Swipe';
+import { BillMonthSheet } from '../sheets/BillMonthSheet';
 
 const WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const monthLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -31,7 +33,7 @@ export function Bills() {
   const paid = due.filter((o) => o.paid);
   const total = due.reduce((s, o) => s + o.amount, 0);
   const paidTotal = paid.reduce((s, o) => s + o.amount, 0);
-  const splits = billItems(data).filter((i) => i.parts);
+  const splits = billItems(data).filter((i) => i.saves);
 
   // Unpaid bills grouped by the day they're paid: paydays for "pay when I get paid", due dates for autopay.
   const groups: { date: string; items: BillOccurrence[] }[] = [];
@@ -48,7 +50,7 @@ export function Bills() {
           <div className="title-row">
             <h1>Bills</h1>
             <HelpTip label="How Bills works">
-              Tap the circle when a bill is paid; it counts for that month only. Bills are grouped by the day they're paid, so bills paid from the same paycheck sit together. Card and loan payments show here too; add or change those on the Debt page.
+              Tap the circle (or swipe a bill to the right) when it's paid; it counts for that month only. Tap a bill to change this month's amount. Bills are grouped by the day they're paid, so bills paid from the same paycheck sit together. Card and loan payments show here too; add or change those on the Debt page.
             </HelpTip>
           </div>
           <div className="sub">Everything due each month, in one place</div>
@@ -149,35 +151,41 @@ export function Bills() {
 
 function groupLabel(o: BillOccurrence, today: string): string {
   const late = o.payDate < today;
-  if (o.item.parts) return `${late ? 'Was due' : 'Due'} ${weekdayDate(o.payDate)} · from the bucket`;
+  if (o.item.saves) return `${late ? 'Was due' : 'Due'} ${weekdayDate(o.payDate)} · from the bucket`;
   if (o.item.timing === 'payday') return `${late ? 'Was to be paid' : 'Pay'} ${weekdayDate(o.payDate)} · from that day's paycheck`;
   return `${late ? 'Was due' : 'Due'} ${weekdayDate(o.payDate)}`;
 }
 
 function BillRow({ o, today }: { o: BillOccurrence; today: string }) {
   const act = useBillActions();
+  const ui = useUI();
   const late = !o.paid && o.payDate < today;
   const soon = !o.paid && !late && o.payDate <= addDays(today, 3);
   const sub = o.paid
-    ? `Paid ${weekdayDate(o.payDate)}${o.item.parts ? ' · from the bucket' : ''}`
-    : [`Due ${shortDate(o.dueDate)}`, o.item.timing === 'due-date' && !o.item.parts && 'autopay', late && 'not paid yet'].filter(Boolean).join(' · ');
+    ? `Paid ${weekdayDate(o.payDate)}${o.item.saves ? ' · from the bucket' : o.auto ? ' · autopay' : ''}`
+    : [`Due ${shortDate(o.dueDate)}`, o.item.autoTickSince && 'autopay', late && 'not paid yet'].filter(Boolean).join(' · ');
   return (
-    <li>
+    <SwipeRow label={o.paid ? 'Not paid' : 'Paid ✓'} className={o.paid ? 'undo' : ''} onSwipe={() => act.togglePaid(o)}>
       <span className={`date-tile ${o.paid ? 'paid' : late || soon ? 'soon' : ''}`} aria-hidden="true">
         <small>{WD[weekday(o.dueDate)]}</small>
         {Number(o.dueDate.slice(8))}
       </span>
-      <button className="rowbtn grow" onClick={() => act.edit(o.item)} aria-label={`Edit ${o.item.name}`}>
+      <button
+        className="rowbtn grow"
+        onClick={() => ui.open(<BillMonthSheet itemKind={o.item.itemKind} itemId={o.item.itemId} dueDate={o.dueDate} />)}
+        aria-label={`${o.item.name}, ${money(o.amount)}: this month's details`}
+      >
         <div className="grow">
           <div style={{ fontWeight: 600, color: o.paid ? 'var(--ink2)' : undefined }}>{o.item.name}</div>
           <div className={`sub ${o.paid ? 'good' : late || soon ? 'soon' : ''}`}>{sub}</div>
         </div>
       </button>
-      <span className="num" style={{ color: o.paid ? 'var(--ink2)' : undefined }}>
+      <span className="num amt" style={{ color: o.paid ? 'var(--ink2)' : undefined }}>
         {money(o.amount)}
+        {o.changed && <small className="this-month">this month</small>}
       </span>
       <Tick done={o.paid} label={o.paid ? `Mark ${o.item.name} not paid` : `Mark ${o.item.name} paid`} onClick={() => act.togglePaid(o)} />
-    </li>
+    </SwipeRow>
   );
 }
 
@@ -189,20 +197,27 @@ function SplitCard({ item, monthStart }: { item: BillItem; monthStart: string })
   const st = splitStatus(data, item, dueDate);
   const payment = billsDue(data, dueDate, dueDate).find((o) => o.item.itemId === item.itemId && o.item.itemKind === item.itemKind);
   const bucket = bucketBalance(data, item);
+  // Saved from every paycheck: show this month's set-asides and a count, not all of them.
+  const monthEnd = addDays(addMonths(monthStart, 1), -1);
+  const shown = item.perPaycheck ? st.parts.filter((p) => p.date >= monthStart && p.date <= monthEnd) : st.parts;
+  const doneCount = st.parts.filter((p) => p.done).length;
+  const far = dueDate > addMonths(monthStart, 2);
   return (
     <div className="card split-card">
       <div className="split-head">
         <span className="dot" aria-hidden="true">
-          <Icon name="house" size={20} />
+          <Icon name={item.itemKind === 'debt' ? 'house' : 'receipt'} size={20} />
         </span>
         <div className="grow">
           <h3 style={{ margin: 0 }}>{item.name}</h3>
           <div className="sub">
-            Saving in {monthName(monthStart)} for the {shortDate(dueDate)} payment
+            {item.perPaycheck
+              ? `${money(st.parts[0]?.amount ?? 0)} from each paycheck for the ${far ? fullDate(dueDate) : shortDate(dueDate)} payment`
+              : `Saving in ${monthName(monthStart)} for the ${shortDate(dueDate)} payment`}
           </div>
         </div>
         <button className="link" onClick={() => act.edit(item)}>
-          Edit split
+          Edit
         </button>
       </div>
       <div style={{ marginTop: 14 }}>
@@ -211,13 +226,18 @@ function SplitCard({ item, monthStart }: { item: BillItem; monthStart: string })
       <div style={{ margin: '8px 0 4px' }}>
         <Bar value={st.total ? st.saved / st.total : 0} />
       </div>
+      {item.perPaycheck && (
+        <div className="faint" style={{ fontSize: 12.5 }}>
+          {doneCount} of {st.parts.length} paychecks set aside{shown.length ? ` · ${shown.length} this month` : ' · none this month'}
+        </div>
+      )}
       <ul className="list">
-        {st.parts.map((p) => (
+        {shown.map((p) => (
           <li key={p.index}>
-            <Tick done={!!p.done} label={p.done ? `Undo part ${p.index + 1} set aside` : `Mark part ${p.index + 1} set aside`} onClick={() => act.toggleSetAside(item, dueDate, p)} />
+            <Tick done={!!p.done} label={p.done ? `Undo the ${shortDate(p.date)} set-aside for ${item.name}` : `Mark ${shortDate(p.date)} set aside for ${item.name}`} onClick={() => act.toggleSetAside(item, dueDate, p)} />
             <div className="grow">
-              <div style={{ fontWeight: 600, color: p.done ? 'var(--ink2)' : undefined }}>Set aside part {p.index + 1}</div>
-              <div className={`sub ${p.done ? 'good' : ''}`}>{p.done ? `Set aside ${weekdayDate(p.date)}` : `${weekdayDate(p.date)} · payday`}</div>
+              <div style={{ fontWeight: 600, color: p.done ? 'var(--ink2)' : undefined }}>{item.perPaycheck ? `From the ${shortDate(p.date)} paycheck` : `Set aside part ${p.index + 1}`}</div>
+              <div className={`sub ${p.done ? 'good' : ''}`}>{p.done ? `Set aside ${weekdayDate(p.date)}` : item.perPaycheck ? `${weekdayDate(p.date)} · payday` : `${weekdayDate(p.date)} · payday`}</div>
             </div>
             <span className="num">{money(p.amount)}</span>
           </li>
@@ -227,7 +247,7 @@ function SplitCard({ item, monthStart }: { item: BillItem; monthStart: string })
             <Tick done={payment.paid} label={payment.paid ? `Undo the ${item.name} payment` : `Log the ${item.name} payment`} onClick={() => act.togglePaid(payment)} />
             <div className="grow">
               <div style={{ fontWeight: 600, color: payment.paid ? 'var(--ink2)' : undefined }}>Pay {item.name.toLowerCase()}</div>
-              <div className={`sub ${payment.paid ? 'good' : ''}`}>{payment.paid ? `Paid ${weekdayDate(payment.payDate)} · logged` : `${weekdayDate(dueDate)} · from these savings`}</div>
+              <div className={`sub ${payment.paid ? 'good' : ''}`}>{payment.paid ? `Paid ${weekdayDate(payment.payDate)} · logged` : `${far ? fullDate(dueDate) : weekdayDate(dueDate)} · from these savings`}</div>
             </div>
             <span className="num">{money(payment.amount)}</span>
           </li>

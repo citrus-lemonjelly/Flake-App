@@ -588,3 +588,14 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
   .mini-seg button { padding: 6px 8px; }
   .ms-strip { margin: 0 -12px 14px; padding: 2px 12px 6px; }
 }
+
+/* ---------- Swipe a row to act on it ---------- */
+.list > li.swipe-row { display: block; padding: 0; position: relative; overflow: hidden; }
+.swipe-fg { display: flex; align-items: center; gap: 12px; padding: 10px 0; background: var(--surface); position: relative; touch-action: pan-y; transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.swipe-bg { position: absolute; inset: 4px 0; display: flex; align-items: center; padding-left: 14px; border-radius: 12px; background: color-mix(in oklab, var(--good) 75%, var(--surface)); color: #fff; font-weight: 700; font-size: 13px; }
+.swipe-bg.ready { background: var(--good); }
+.swipe-row.undo .swipe-bg { background: color-mix(in oklab, var(--ink3) 70%, var(--surface)); }
+.swipe-row.undo .swipe-bg.ready { background: var(--ink2); }
+.num.amt { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.this-month { font-family: var(--font-ui); font-size: 10.5px; font-weight: 600; color: var(--warn); letter-spacing: 0; }
+@media (prefers-reduced-motion: reduce) { .swipe-fg { transition: none; } }
