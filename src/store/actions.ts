@@ -15,6 +15,7 @@ import type {
 } from '../model/types';
 import { byId, live } from '../engine/live';
 import { weeklyAmount } from '../engine/flow';
+import { addDays } from '../engine/dates';
 
 /**
  * Pure state transitions. Each returns a new AppData and stamps updatedAt on
@@ -184,6 +185,35 @@ export function budgetsToWeekly(data: AppData): AppData {
 export function checkIn(data: AppData, c: { date: ISODate; balance: Cents; note?: string }): { data: AppData; checkIn: BalanceCheckIn } {
   const rec = entity<BalanceCheckIn>({ date: c.date, balance: c.balance, note: c.note ?? '' });
   return { data: upsert(data, 'checkIns', rec), checkIn: rec };
+}
+
+/** What a check-in found for one bill: it went out (at this amount, if different), or not yet. */
+export interface BillOutcome {
+  occurrence: Occurrence & { planned: ISODate };
+  went: boolean;
+  /** This month's real amount, when it differs from the usual. */
+  amount?: Cents;
+}
+
+/**
+ * A check-in: the bank balance, and for each bill that was due to leave, whether it
+ * did. Bills that went out are marked paid; ones that haven't move to the next day,
+ * so the balance carried forward still expects them.
+ */
+export function checkInWithBills(data: AppData, c: { date: ISODate; balance: Cents; bills: BillOutcome[] }): AppData {
+  return checkIn(applyBillOutcomes(data, c.date, c.bills), { date: c.date, balance: c.balance }).data;
+}
+
+/** The bill half of a check-in on its own, so the sheet can show Flake's estimate with the answers counted. */
+export function applyBillOutcomes(data: AppData, date: ISODate, bills: BillOutcome[]): AppData {
+  let next = data;
+  for (const { occurrence: o, went, amount } of bills) {
+    if (went) {
+      if (amount !== undefined) next = setBillAmount(next, o, amount);
+      next = markBillPaid(next, { ...o, today: date }, true);
+    } else next = recordBillPayment(next, { itemKind: o.itemKind, itemId: o.itemId, dueDate: o.dueDate, paidOn: addDays(date, 1) });
+  }
+  return next;
 }
 
 /** Record a payment and lower the debt's balance. */

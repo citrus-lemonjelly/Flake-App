@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { addDays, balanceForecast, checkingFloor, floorCheck, billItems, billsDue, bucketBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
+import { addDays, balanceForecast, billsToConfirm, checkingFloor, daysBetween, floorCheck, billItems, billsDue, bucketBalance, lastBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { updateSettings } from '../store/actions';
 import { useUI } from '../state/ui';
@@ -16,7 +16,7 @@ import { PaySheet } from '../sheets/PaySheet';
 import { HelpTip } from '../ui/ScreenTip';
 import { Icon } from '../ui/icons';
 import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
-import { BalanceSheet } from '../sheets/BalanceSheet';
+import { CheckInSheet } from '../sheets/CheckInSheet';
 import { SendToDebtSheet } from '../sheets/SendToDebtSheet';
 import { FloorSheet } from '../sheets/FloorSheet';
 import { Tick, useBillActions } from '../ui/billActions';
@@ -61,7 +61,7 @@ export function Home() {
           <div className="title-row">
             <h1>Hi, {name}</h1>
             <HelpTip label="How Home works">
-              <b>Left over</b> is this month's money in minus everything going out: bills, money set aside for bills you save up for, and spending. Tap <b>Log pay</b> when a paycheck lands to put in what really arrived.
+              <b>Check in</b> each time you look at your bank: type what's in checking and confirm which bills went out. The top card shows that real balance, not a projection. Tap <b>Log pay</b> when a paycheck lands to put in what really arrived.
             </HelpTip>
           </div>
           <div className="sub">
@@ -75,7 +75,7 @@ export function Home() {
         <div className="stack">
           <GettingStarted />
           <WeekReview />
-          <LeftOver />
+          <CheckInHero />
           <BalanceCard />
           <FlowCard />
         </div>
@@ -202,45 +202,70 @@ function GettingStarted() {
   );
 }
 
-/** The one big number: what's left this month once everything going out is counted. */
-function LeftOver() {
+/**
+ * The top of Home: the balance from the last check-in (what was really in the bank,
+ * not a projection) and the bills waiting to be confirmed at the next one.
+ */
+function CheckInHero() {
   const data = useData();
   const x = useDerived();
   const ui = useUI();
-  const [m] = useMemo(() => monthFlows(data, x.today, 0, 0), [data, x.today]);
-  const flow = m!;
+  const last = lastBalance(data);
+  const waiting = billsToConfirm(data, x.today);
+  const waitingTotal = waiting.reduce((s, o) => s + o.amount, 0);
+  const ago = last ? daysBetween(last.date, x.today) : 0;
   const buckets = billItems(data)
     .filter((i) => i.saves)
     .map((i) => ({ item: i, balance: bucketBalance(data, i) }));
-  const share = flow.inTotal > 0 ? Math.min(1, flow.outTotal / flow.inTotal) : 1;
-  const left = useCountUp(flow.left);
   const hasDebt = data.debts.some((d) => !d.deletedAt && (d.balance ?? 0) > 0);
-  const inTotal = useCountUp(flow.inTotal);
-  const outTotal = useCountUp(flow.outTotal);
   return (
-    <section className="hero" aria-label="Left over this month">
+    <section className="hero" aria-label="Check in">
       <div className="top">
-        <div className="label">Left over in {monthName(flow.start)}</div>
+        <div className="label">{last ? 'In checking at your last check-in' : 'Check in with your bank'}</div>
         <button className="btn white small" onClick={() => ui.open(<PaySheet />)}>
           + Log pay
         </button>
       </div>
-      <div className={`big ${flow.left < 0 ? 'neg' : ''}`}>{left < 0 ? '−' : ''}{money(Math.abs(left), true)}</div>
-      <div className="hero-sub">{flow.left < 0 ? 'More is going out than coming in this month.' : 'After bills, set-asides and spending · free for debt and savings'}</div>
-      <div className="hero-split" role="img" aria-label={`${Math.round(share * 100)}% of the money coming in is going out`}>
-        <i style={{ width: `${share * 100}%` }} />
+      {last ? (
+        <>
+          <div className={`big ${last.balance < 0 ? 'neg' : ''}`}>
+            {last.balance < 0 ? '−' : ''}
+            {money(Math.abs(last.balance))}
+          </div>
+          <div className="hero-sub">{ago === 0 ? 'Checked in today' : `Checked in ${weekdayDate(last.date)} · ${ago} day${ago === 1 ? '' : 's'} ago`}</div>
+        </>
+      ) : (
+        <div className="hero-sub" style={{ margin: '10px 0 4px' }}>
+          Each time you look at your bank, type in what's in checking and confirm which bills went out.
+        </div>
+      )}
+      <div className="math">
+        {waiting.length ? (
+          <>
+            <div className="row" style={{ fontWeight: 700 }}>
+              <span>
+                {waiting.length} bill{waiting.length === 1 ? '' : 's'} to confirm
+              </span>
+              <span>{money(waitingTotal)}</span>
+            </div>
+            {waiting.slice(0, 3).map((o) => (
+              <div key={`${o.item.itemId}${o.dueDate}`} className="row">
+                <span>
+                  {o.item.name} · {shortDate(o.payDate)}
+                </span>
+                <span>{money(o.amount)}</span>
+              </div>
+            ))}
+            {waiting.length > 3 && <div className="row">and {waiting.length - 3} more</div>}
+          </>
+        ) : (
+          <div className="row">✓ Every bill due so far is confirmed</div>
+        )}
       </div>
-      <div className="hero-tiles">
-        <div>
-          <span>Money in</span>
-          <b>{money(inTotal, true)}</b>
-          <small>{money(flow.inSoFar, true)} arrived so far</small>
-        </div>
-        <div>
-          <span>Money out</span>
-          <b>{money(outTotal, true)}</b>
-          <small>{money(flow.outSoFar, true)} out so far</small>
-        </div>
+      <div className="hero-btns">
+        <button className="btn white" onClick={() => ui.open(<CheckInSheet />)}>
+          Check in
+        </button>
       </div>
       {hasDebt && (
         <button className="hero-send" onClick={() => ui.open(<SendToDebtSheet />)}>
@@ -279,7 +304,7 @@ function BalanceCard() {
         <p className="muted" style={{ margin: '0 0 12px', fontSize: 14 }}>
           Type in what's in checking to see where it's headed over the next month, with your pay, bills, set-asides and spending.
         </p>
-        <button className="btn small" onClick={() => ui.open(<BalanceSheet />)}>
+        <button className="btn small" onClick={() => ui.open(<CheckInSheet />)}>
           Add balance
         </button>
       </div>
@@ -302,7 +327,7 @@ function BalanceCard() {
               {floor ? `Keep ${money(floor, true)}` : 'No floor'}
             </button>
           )}
-          <button className="link" onClick={() => ui.open(<BalanceSheet />)}>
+          <button className="link" onClick={() => ui.open(<CheckInSheet />)}>
             Update
           </button>
         </span>

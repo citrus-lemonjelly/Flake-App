@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.21.0',
+    date: '2026-11-14',
+    title: 'Check in to confirm your bills',
+    items: [
+      'The top of Home now shows what was really in checking at your last check-in, instead of a projected Left over number.',
+      'Check in each time you look at your bank: type the balance, then mark each bill that was due as Went out or Not yet.',
+      'A bill that went out for a different amount can be corrected right there. One that hasn’t gone out yet is expected the next day and asked about again.',
+    ],
+  },
+  {
     version: '0.20.1',
     date: '2026-11-10',
     title: 'You choose the floor',

@@ -119,3 +119,13 @@ export function bucketBalance(data: AppData, item: BillItem): Cents {
     .map((p) => p.amount ?? item.amount);
   return sum(asides.map((s) => s.amount)) - sum(paidOut);
 }
+
+/**
+ * What a check-in asks about: bills and debt payments that were due to leave the bank
+ * by `asOf` and haven't been marked paid, looking back five weeks.
+ */
+export function billsToConfirm(data: AppData, asOf: ISODate): BillOccurrence[] {
+  const from = addDays(asOf, -35);
+  // Due dates run ahead of the window: a bill paid on payday leaves before it's due.
+  return billsDue(data, from, addDays(asOf, 62)).filter((o) => !o.paid && o.payDate >= from && o.payDate <= asOf);
+}

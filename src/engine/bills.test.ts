@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { emptyData, entity } from '../model/factory';
 import type { AppData, BalanceCheckIn, Bill, Category, IncomeSource, Spending } from '../model/types';
-import { autoTickBills, budgetsToWeekly, logSpending, markBillPaid, setAsidePart, setBillAmount, updateSettings } from '../store/actions';
+import { autoTickBills, budgetsToWeekly, checkInWithBills, logSpending, markBillPaid, setAsidePart, setBillAmount, updateSettings } from '../store/actions';
 import type { DebtPayment } from '../model/types';
 import { billItems, dueDatesIn, outflowsBetween, partDates } from './outflows';
-import { autoTickDue, billsDue, bucketBalance, savingFor, splitStatus } from './bills';
+import { autoTickDue, billsDue, billsToConfirm, bucketBalance, savingFor, splitStatus } from './bills';
 import { balanceForecast, carriedIn, checkingFloor, floorCheck, monthFlow, recentPurchases, weekSpending, weeklyAmount } from './flow';
 import { weekRanges } from './budget';
 
@@ -299,5 +299,44 @@ describe('the floor kept in checking', () => {
     expect(checkingFloor(settings({ cashBuffer: 10_000 }))).toEqual({ amount: 0, chosen: false });
     expect(checkingFloor(settings({ cashBuffer: 10_000, guide: { confirmed: ['keep'] } }))).toEqual({ amount: 10_000, chosen: true });
     expect(checkingFloor(settings({ cashBuffer: 50_000 }))).toEqual({ amount: 50_000, chosen: true });
+  });
+});
+
+describe('checking in reviews the bills that were due to go out', () => {
+  // Phone is paid on the Nov 13 payday; the house comes out of its bucket on the 1st.
+  const asOf = '2026-11-16';
+  const occ = (o: ReturnType<typeof billsToConfirm>[number]) => ({ itemKind: o.item.itemKind, itemId: o.item.itemId, dueDate: o.dueDate, planned: o.payDate });
+
+  it('asks about every unpaid bill that was due to leave by the check-in', () => {
+    const d = household();
+    // Five weeks back reaches October's phone bill too.
+    expect(billsToConfirm(d, asOf).map((o) => [o.item.name, o.payDate])).toEqual([
+      ['Phone', '2026-10-15'],
+      ['House', '2026-11-01'],
+      ['Phone', '2026-11-13'],
+    ]);
+    const novPhone = billsToConfirm(d, asOf)[2]!;
+    expect(billsToConfirm(markBillPaid(d, { ...occ(novPhone), today: asOf }, true), asOf).map((o) => o.payDate)).toEqual(['2026-10-15', '2026-11-01']);
+  });
+
+  it('marks what went out paid, at its real amount, and moves the rest to the next day', () => {
+    const d = household();
+    const [octPhone, houseDue, phone] = billsToConfirm(d, asOf);
+    const next = checkInWithBills(d, {
+      date: asOf,
+      balance: 250_000,
+      bills: [
+        { occurrence: occ(octPhone!), went: true },
+        { occurrence: occ(houseDue!), went: false },
+        { occurrence: occ(phone!), went: true, amount: 9_500 },
+      ],
+    });
+    const nov = billsDue(next, '2026-11-01', '2026-11-30');
+    expect(nov.find((o) => o.item.name === 'Phone')).toMatchObject({ paid: true, amount: 9_500, payDate: '2026-11-13' });
+    expect(nov.find((o) => o.item.name === 'House')).toMatchObject({ paid: false, payDate: '2026-11-17' });
+    // Nothing left to ask about today; the house comes back at tomorrow's check-in.
+    expect(billsToConfirm(next, asOf)).toEqual([]);
+    expect(billsToConfirm(next, '2026-11-17').map((o) => o.item.name)).toEqual(['House']);
+    expect(next.checkIns.map((c) => [c.date, c.balance])).toEqual([[asOf, 250_000]]);
   });
 });
