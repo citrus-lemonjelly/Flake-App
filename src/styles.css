@@ -722,3 +722,9 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
   .swipe-fg:has(.trend-btn) { gap: 8px; }
   .trend-btn { width: 22px; }
 }
+.usual-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); }
+.usual-notice > div:first-child { flex: 1 1 220px; min-width: 0; }
+.usual-notice b { display: block; font-size: 14px; }
+.usual-notice span { display: block; font-size: 12.5px; color: var(--ink2); margin-top: 2px; }
+.usual-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.card .usual-notice { margin: 6px 0 8px; }

@@ -10,6 +10,7 @@ import { HelpTip } from '../ui/ScreenTip';
 import { Tick, useBillActions } from '../ui/billActions';
 import { SwipeRow } from '../ui/Swipe';
 import { BillMonthSheet } from '../sheets/BillMonthSheet';
+import { UsualNotice } from '../ui/UsualNotice';
 
 const WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const monthLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -61,6 +62,8 @@ export function Bills() {
           </button>
         </div>
       </header>
+
+      <UsualNotice />
 
       <div className="month-nav">
         <button className="icon-btn" aria-label="Previous month" onClick={() => setOffset(offset - 1)}>

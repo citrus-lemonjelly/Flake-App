@@ -12,6 +12,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.23.0',
+    date: '2026-11-16',
+    title: 'Flake notices when a bill’s amount has changed for good',
+    items: [
+      'When a bill comes to the same new amount two payments in a row (a power bill on budget billing going from $106 to $146, say), Bills and Home ask whether to make it the usual amount.',
+      'Make it the usual and the weeks and months ahead use the new amount. Earlier months keep what they really were, so trends stay true.',
+      'Keep the old amount instead and Flake won’t ask about that amount again.',
+      'Setting a month’s amount that matches the month before offers “Make it the usual” right away.',
+    ],
+  },
+  {
     version: '0.22.1',
     date: '2026-11-16',
     title: 'A bill that came to a different amount',

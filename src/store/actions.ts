@@ -15,7 +15,8 @@ import type {
 } from '../model/types';
 import { byId, live } from '../engine/live';
 import { weeklyAmount } from '../engine/flow';
-import { addDays } from '../engine/dates';
+import { addDays, addMonths } from '../engine/dates';
+import { billsDue } from '../engine/bills';
 
 /**
  * Pure state transitions. Each returns a new AppData and stamps updatedAt on
@@ -189,6 +190,28 @@ export function setBillAmount(data: AppData, p: Occurrence & { planned: ISODate 
   }
   if (amount === null) return data;
   return recordBillPayment(data, { itemKind: p.itemKind, itemId: p.itemId, dueDate: p.dueDate, paidOn: p.planned, amount });
+}
+
+/**
+ * Make a bill's new amount its usual one. Earlier months that came to the old
+ * amount keep it (recorded on the month), so history and trends stay true.
+ */
+export function adoptUsualAmount(data: AppData, billId: Id, amount: Cents, since: ISODate): AppData {
+  const bill = data.bills.find((b) => b.id === billId && !b.deletedAt);
+  if (!bill) return data;
+  let next = data;
+  const earlier = billsDue(data, addMonths(since, -12), addDays(since, -1)).filter((o) => o.item.itemKind === 'bill' && o.item.itemId === billId && !o.changed);
+  for (const o of earlier) {
+    const rec = findPayment(next, { itemKind: 'bill', itemId: billId, dueDate: o.dueDate });
+    if (rec?.amount != null) continue;
+    next = setBillAmount(next, { itemKind: 'bill', itemId: billId, dueDate: o.dueDate, planned: o.planned }, bill.amount);
+  }
+  return patch(next, 'bills', billId, { amount, keepUsualOver: undefined });
+}
+
+/** Keep a bill's usual amount: don't suggest this new one again. */
+export function keepUsualAmount(data: AppData, billId: Id, over: Cents): AppData {
+  return patch(data, 'bills', billId, { keepUsualOver: over });
 }
 
 /** Mark one part of a bill saved for in parts as set aside into its bucket (or undo it). */

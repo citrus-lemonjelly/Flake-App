@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { billsDue } from '../engine';
+import { billsDue, usualChanges } from '../engine';
 import type { Cents } from '../model/types';
 import { setBillAmount } from '../store/actions';
-import { useData, useUpdate } from '../state/store';
+import { useData, useDerived, useStore, useUpdate } from '../state/store';
+import { useAdoptUsual } from '../ui/UsualNotice';
 import { useUI } from '../state/ui';
 import { MoneyField, Sheet } from '../ui/components';
 import { money, monthYear, weekdayDate } from '../ui/format';
@@ -14,6 +15,9 @@ export function BillMonthSheet({ itemKind, itemId, dueDate }: { itemKind: 'bill'
   const update = useUpdate();
   const ui = useUI();
   const act = useBillActions();
+  const store = useStore();
+  const { today } = useDerived();
+  const adopt = useAdoptUsual();
   const o = billsDue(data, dueDate, dueDate).find((b) => b.item.itemKind === itemKind && b.item.itemId === itemId);
   const [amount, setAmount] = useState<Cents | null>(o?.amount ?? null);
   if (!o) return null;
@@ -42,7 +46,9 @@ export function BillMonthSheet({ itemKind, itemId, dueDate }: { itemKind: 'bill'
             disabled={amount === null}
             onClick={() => {
               save();
-              ui.toast(amount !== usual ? `${o.item.name} is ${money(amount!)} this month` : 'Saved');
+              const c = usualChanges(store.get(), today).find((u) => u.item.itemKind === itemKind && u.item.itemId === itemId);
+              if (c) ui.toast(`${o.item.name} has been ${money(c.amount)} ${c.count} times in a row`, { label: `Make it the usual`, onClick: () => adopt(c) });
+              else ui.toast(amount !== usual ? `${o.item.name} is ${money(amount!)} this month` : 'Saved');
               ui.close();
             }}
           >

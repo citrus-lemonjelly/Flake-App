@@ -18,6 +18,7 @@ import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
 import { CheckInSheet } from '../sheets/CheckInSheet';
 import { AheadCard, BucketCard, WeeklyRunway } from './HomeRunway';
 import { SpendingSheet } from '../sheets/SpendingSheet';
+import { UsualNotice } from '../ui/UsualNotice';
 import { FloorSheet } from '../sheets/FloorSheet';
 import { Tick, useBillActions } from '../ui/billActions';
 import { SwipeRow } from '../ui/Swipe';
@@ -499,6 +500,7 @@ function DueSoon() {
       <div className="muted" style={{ fontSize: 13, marginTop: -6, marginBottom: 4 }}>
         {monthBills.length ? `${paidCount} of ${monthBills.length} paid in ${monthName(x.today)} · ${money(toPay)} still to pay` : 'No bills yet.'}
       </div>
+      <UsualNotice />
       {items.length ? (
         <ul className="list">
           {items.map((it) =>
