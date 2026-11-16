@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.1',
+    date: '2026-11-16',
+    title: 'A bill that came to a different amount',
+    items: [
+      'Mark a bill paid and the message offers “Different amount?” to set what it really came to this month.',
+      'Tap a bill in Bills due soon on Home, or use the button under a bill’s six-month trend, to set this month’s amount. The bill itself stays the same.',
+      'Fixed: on the phone, Ahead → Months ran into the card below it, and the Money flow chart’s bars were drawn too thin.',
+    ],
+  },
+  {
     version: '0.22.0',
     date: '2026-11-16',
     title: 'What’s left each week, and where it went',

@@ -50,7 +50,7 @@ export function Bills() {
           <div className="title-row">
             <h1>Bills</h1>
             <HelpTip label="How Bills works">
-              Tap the circle (or swipe a bill to the right) when it's paid; it counts for that month only. Tap a bill to change this month's amount. Bills are grouped by the day they're paid, so bills paid from the same paycheck sit together. Card and loan payments show here too; add or change those on the Debt page.
+              Tap the circle (or swipe a bill to the right) when it's paid; it counts for that month only. Bill came to a different amount? Tap its name (or the arrow beside it) to set this month's amount; the bill itself stays the same. Bills are grouped by the day they're paid, so bills paid from the same paycheck sit together. Card and loan payments show here too; add or change those on the Debt page.
             </HelpTip>
           </div>
           <div className="sub">Everything due each month, in one place</div>
@@ -193,7 +193,7 @@ function BillRow({ o, today }: { o: BillOccurrence; today: string }) {
       </SwipeRow>
       {open && (
         <li className="trend-li">
-          <BillTrend o={o} />
+          <BillTrend o={o} onChange={o.item.saves ? undefined : () => act.changeAmount(o)} />
         </li>
       )}
     </>
@@ -204,7 +204,7 @@ function BillRow({ o, today }: { o: BillOccurrence; today: string }) {
  * One bill's last six months: what it really came to each month, from the
  * amounts recorded when it was paid or changed for the month.
  */
-function BillTrend({ o }: { o: BillOccurrence }) {
+function BillTrend({ o, onChange }: { o: BillOccurrence; onChange?: () => void }) {
   const data = useData();
   const past = billsDue(data, addMonths(o.dueDate, -5 * o.item.every), o.dueDate)
     .filter((p) => p.item.itemKind === o.item.itemKind && p.item.itemId === o.item.itemId)
@@ -232,8 +232,13 @@ function BillTrend({ o }: { o: BillOccurrence }) {
       <div className="explain">
         {changed.length
           ? `Usually ${money(usual, true)} · 6-month average ${money(avg, true)} · highest ${money(high.amount, true)} in ${monthOnly(high.dueDate)}`
-          : `${money(usual, true)} every time so far. When a month comes to a different amount, tap the bill and set it; the trend fills in here.`}
+          : `${money(usual, true)} every time so far. When a month comes to a different amount, set it here and the trend fills in.`}
       </div>
+      {onChange && (
+        <button className="btn small ghost" style={{ marginTop: 8 }} onClick={onChange}>
+          {o.changed ? `${monthOnly(o.dueDate)} is ${money(o.amount)} · change` : `Different amount in ${monthOnly(o.dueDate)}?`}
+        </button>
+      )}
     </div>
   );
 }

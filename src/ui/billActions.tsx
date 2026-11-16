@@ -5,6 +5,7 @@ import { useDerived, useStore, useUpdate } from '../state/store';
 import { confetti, haptic } from './motion';
 import { useUI } from '../state/ui';
 import { BillSheet, DebtSheet } from '../sheets/EditSheets';
+import { BillMonthSheet } from '../sheets/BillMonthSheet';
 import { money } from './format';
 import { Icon } from './icons';
 
@@ -31,7 +32,10 @@ export function useBillActions() {
   const store = useStore();
   const ui = useUI();
   const { today } = useDerived();
+  /** This month's amount, for a bill that came to something different. */
+  const changeAmount = (o: BillOccurrence) => ui.open(<BillMonthSheet itemKind={o.item.itemKind} itemId={o.item.itemId} dueDate={o.dueDate} />);
   return {
+    changeAmount,
     togglePaid(o: BillOccurrence) {
       const paid = !o.paid;
       update((d) => markBillPaid(d, { itemKind: o.item.itemKind, itemId: o.item.itemId, dueDate: o.dueDate, planned: o.payDate, today }, paid));
@@ -41,7 +45,12 @@ export function useBillActions() {
       if (all && all.length && all.every((b) => b.paid)) {
         confetti();
         ui.toast(`Every ${new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' })} bill is paid 🎉`);
-      } else ui.toast(paid ? `${o.item.name} marked paid · ${money(o.amount)}` : `${o.item.name} marked not paid`);
+      } else if (paid && !o.item.saves)
+        ui.toast(`${o.item.name} marked paid · ${money(o.amount)}`, {
+          label: 'Different amount?',
+          onClick: () => changeAmount(o),
+        });
+      else ui.toast(paid ? `${o.item.name} marked paid · ${money(o.amount)}` : `${o.item.name} marked not paid`);
     },
     toggleSetAside(item: BillItem, dueDate: string, p: PartStatus) {
       const on = !p.done;

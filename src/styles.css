@@ -658,11 +658,11 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .weekstrip .wk i.neg { background: color-mix(in oklab, var(--bad) 70%, var(--surface)); }
 .weekstrip .wk span.neg { color: var(--bad); }
 .weekstrip .wk small { font-size: 11px; font-weight: 500; color: var(--ink3); }
-.mbars > li { gap: 10px; }
-.mbars .m { width: 54px; font-size: 13px; color: var(--ink2); flex: none; }
-.mbars i { display: block; height: 8px; border-radius: 99px; background: var(--good); }
-.mbars i.neg { background: var(--bad); }
-.mbars .sub { margin-top: 4px; }
+.month-rows > li { gap: 10px; }
+.month-rows .m { width: 54px; font-size: 13px; color: var(--ink2); flex: none; }
+.month-rows i { display: block; height: 8px; border-radius: 99px; background: var(--good); }
+.month-rows i.neg { background: var(--bad); }
+.month-rows .sub { margin-top: 4px; }
 .checkin-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 12px; border-radius: 12px; background: var(--surface2); }
 .checkin-row b { display: block; font-size: 13.5px; }
 .checkin-row span { display: block; font-size: 12px; color: var(--ink3); }
