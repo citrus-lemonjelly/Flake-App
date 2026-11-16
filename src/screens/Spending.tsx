@@ -1,20 +1,27 @@
-import { useEffect, useState } from 'react';
-import { addDays, billItems, billsDue, live, splitStatus, weekRanges, weekSpending, type ScheduledOutflow } from '../engine';
-import { budgetsToWeekly } from '../store/actions';
+import { useEffect, useMemo, useState } from 'react';
+import { addDays, live, plannedSplit, runway, spendKey, spendingInsights, weekRanges, weekSpending, whereItWent, type Insight } from '../engine';
+import { budgetsToWeekly, patch } from '../store/actions';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
-import { BUCKET_IDEAS, CategorySheet } from '../sheets/EditSheets';
+import { CategorySheet } from '../sheets/EditSheets';
 import { LogSheet } from '../sheets/LogSheet';
 import { SpendingSheet } from '../sheets/SpendingSheet';
 import { Bar, Empty } from '../ui/components';
-import { Icon } from '../ui/icons';
+import { Icon, type IconName } from '../ui/icons';
 import { money, shortDate, weekdayDate } from '../ui/format';
 import { HelpTip } from '../ui/ScreenTip';
-import { Tick, useBillActions } from '../ui/billActions';
+import { PlannedToggle } from '../ui/PlannedToggle';
 import { SwipeRow } from '../ui/Swipe';
 import { useRemoveWithUndo } from '../state/undo';
+import { SplitBar } from './Home';
 
-/** Spending week by week: each budget, the purchases, and the bills leaving the bank that week. */
+const INSIGHT_ICON: Record<Insight['icon'], IconName> = { up: 'up', repeat: 'receipt', coins: 'money', alert: 'warn' };
+
+/**
+ * Spending, week by week: a log of what was bought outside the bills, the
+ * mortgage and debt payments. What's left after the musts, planned against
+ * unplanned, what stands out, and where it went.
+ */
 export function Spending() {
   const data = useData();
   const x = useDerived();
@@ -25,19 +32,25 @@ export function Spending() {
   const [focus, setFocus] = useState<string | null>(ui.params.categoryId ?? null);
   useEffect(() => setFocus(ui.params.categoryId ?? null), [ui.params.categoryId]);
 
-  // Eight weeks ending with the one shown: the last six for the chart, all eight for each bucket's trend.
-  const hist = weekRanges(data, addDays(x.today, (offset - 7) * 7), 8).map((r, i) => weekSpending(data, r, i === 7));
+  // Eight weeks ending with the one shown: the last six for the chart, all eight for each kind's trend.
+  const hist = useMemo(() => weekRanges(data, addDays(x.today, (offset - 7) * 7), 8).map((r) => weekSpending(data, r, false)), [data, x.today, offset]);
+  const runs = useMemo(() => runway(data, hist[2]!.start, 6), [data, hist]);
   const weeks = hist.slice(2);
   const w = hist[7]!;
-  const trend = (id: string) => hist.map((h) => h.byCategory.find((c) => c.category.id === id)?.spent ?? 0);
+  const run = runs[5]!;
+  const trend = (key: string) => hist.map((h) => h.purchases.filter((p) => spendKey(p) === key).reduce((t, p) => t + p.amount, 0));
   const byPerson = new Map<string, number>();
   for (const p of w.purchases) if (p.by) byPerson.set(p.by, (byPerson.get(p.by) ?? 0) + p.amount);
   const current = offset === 0;
-  const left = w.budget - w.spent;
+  const left = run.left - w.spent;
   const daysLeft = Math.round((Date.parse(w.end) - Date.parse(x.today)) / 864e5);
-  const notWeekly = live(data.categories).filter((c) => c.cadence !== 'weekly');
-  const purchases = focus ? w.purchases.filter((p) => p.categoryId === focus) : w.purchases;
-  const focusName = focus ? live(data.categories).find((c) => c.id === focus)?.name : null;
+  const cats = live(data.categories);
+  const notWeekly = cats.filter((c) => c.cadence !== 'weekly' && c.amount > 0);
+  const purchases = focus ? w.purchases.filter((p) => spendKey(p) === focus) : w.purchases;
+  const where = whereItWent(data, w.purchases);
+  const focusName = focus ? where.find((r) => r.key === focus)?.name ?? cats.find((c) => c.id === focus)?.name : null;
+  const insights = spendingInsights(data, w.purchases, hist[6]!.purchases);
+  const split = plannedSplit(w.purchases);
 
   return (
     <>
@@ -46,14 +59,14 @@ export function Spending() {
           <div className="title-row">
             <h1>Spending</h1>
             <HelpTip label="How Spending works">
-              Each bucket is money for one kind of spending each week. Tap a bucket's <b>+</b> to log a purchase into it, or the bucket itself to see its purchases. Swipe a purchase right to edit it or left to delete it. Bills that leave the bank this week are listed too, so the whole week is in one place.
+              A log of what you buy outside the bills, the mortgage and debt payments. Tap <b>+ Log spending</b> after a purchase and say whether it was planned. The top card compares the week with what's left after the musts; <b>Worth a look</b> points out what's climbing or adding up. Swipe a purchase right to edit it or left to delete it.
             </HelpTip>
           </div>
-          <div className="sub">Weekly buckets · weeks start {new Date(`${w.start}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}</div>
+          <div className="sub">Outside bills and debt · weeks start {new Date(`${w.start}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}</div>
         </div>
         <div className="actions">
-          <button className="btn small" onClick={() => ui.open(<CategorySheet />)}>
-            + New bucket
+          <button className="btn small" onClick={() => ui.open(<LogSheet initial="spending" />)}>
+            + Log spending
           </button>
         </div>
       </header>
@@ -62,13 +75,13 @@ export function Spending() {
         <div className="notice" style={{ marginBottom: 14, alignItems: 'center' }}>
           <Icon name="warn" size={16} />
           <div style={{ flex: 1 }}>
-            {notWeekly.map((c) => c.name).join(', ')} {notWeekly.length === 1 ? 'is' : 'are'} set per paycheck or month. They're shown here as the same money per week.
+            {notWeekly.map((c) => c.name).join(', ')} {notWeekly.length === 1 ? 'has' : 'have'} an estimate per paycheck or month. It's shown here as the same money per week.
           </div>
           <button
             className="btn small"
             onClick={() => {
               update(budgetsToWeekly);
-              ui.toast('All budgets are weekly now');
+              ui.toast('All estimates are weekly now');
             }}
           >
             Make weekly
@@ -104,52 +117,79 @@ export function Spending() {
             <div className="label">Spent this week</div>
             <div className="row" style={{ alignItems: 'baseline' }}>
               <span>
-                <span className="num" style={{ fontSize: 30 }}>{money(w.spent)}</span> <span className="muted" style={{ fontSize: 13 }}>of {money(w.budget)}</span>
+                <span className="num" style={{ fontSize: 30 }}>{money(w.spent)}</span> <span className="muted" style={{ fontSize: 13 }}>of {money(run.left)} left after the musts</span>
               </span>
-              <b className={left < 0 ? 'over' : ''} style={{ fontSize: 14 }}>
-                {left >= 0 ? `${money(left)} ${w.end < x.today ? 'under' : 'left'}` : `▲ ${money(-left)} over`}
+              <b className={left < 0 ? 'over' : 'good-text'} style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
+                {left >= 0 ? `${money(left)} ${w.end < x.today ? 'kept' : 'left'}` : `▲ ${money(-left)} over`}
               </b>
             </div>
-            <div style={{ margin: '10px 0 18px' }}>
-              <Bar value={w.budget ? w.spent / w.budget : 0} tone={left < 0 ? 'warn' : undefined} />
+            <div style={{ margin: '10px 0 6px' }}>
+              <Bar value={run.left > 0 ? w.spent / run.left : 1} tone={left < 0 ? 'warn' : undefined} />
               {byPerson.size > 1 && (
                 <div className="faint" style={{ fontSize: 12.5, marginTop: 6 }}>
                   {[...byPerson].map(([name, amt]) => `${name} ${money(amt)}`).join(' · ')}
                 </div>
               )}
             </div>
-            <WeekBars weeks={weeks} budget={w.budget} onPick={(i) => setOffset(offset + i - 5)} />
+            <SplitBar split={split} />
+            <div style={{ marginTop: 16 }}>
+              <WeekBars weeks={weeks} lefts={runs.map((r) => r.left)} onPick={(i) => setOffset(offset + i - 5)} />
+            </div>
           </div>
 
           <div className="card">
-            <h3>Buckets</h3>
-            {w.byCategory.length ? (
-              <ul className="list">
-                {w.byCategory.map(({ category: c, budget, carried, spent }) => {
-                  const over = spent > budget;
-                  const t = trend(c.id);
+            <h3>Worth a look</h3>
+            {insights.length ? (
+              <ul className="list insights">
+                {insights.map((i) => (
+                  <li key={i.text}>
+                    <span className="ic" aria-hidden="true">
+                      <Icon name={INSIGHT_ICON[i.icon]} size={15} />
+                    </span>
+                    <span className="grow">{i.text}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Empty>{w.purchases.length ? 'Nothing stands out this week.' : 'Log a few purchases and Flake points out what’s climbing or adding up.'}</Empty>
+            )}
+          </div>
+
+          <div className="card">
+            <h3>
+              Where it went
+              <button className="link" onClick={() => ui.open(<CategorySheet />)}>
+                + Kind
+              </button>
+            </h3>
+            {where.length ? (
+              <ul className="list went">
+                {where.map((r) => {
+                  const t = trend(r.key);
                   const past = t.slice(0, 7);
                   const avg = past.some((v) => v > 0) ? Math.round(past.reduce((a, b) => a + b, 0) / past.length) : null;
+                  const cat = cats.find((c) => c.id === r.key);
+                  const estimate = cat && cat.amount > 0 ? w.byCategory.find((b) => b.category.id === cat.id)?.budget : undefined;
                   return (
-                    <li key={c.id} className={focus === c.id ? 'picked' : ''}>
-                      <button className="rowbtn" onClick={() => setFocus(focus === c.id ? null : c.id)} aria-pressed={focus === c.id} aria-label={`${c.name}: show its purchases`}>
+                    <li key={r.key} className={focus === r.key ? 'picked' : ''}>
+                      <button className="rowbtn" style={{ width: '100%' }} onClick={() => setFocus(focus === r.key ? null : r.key)} aria-pressed={focus === r.key} aria-label={`${r.name}: show its purchases`}>
                         <div className="grow">
                           <div className="row">
-                            <span style={{ fontWeight: 600 }}>{c.name}</span>
-                            <b className={over ? 'over' : ''} style={{ fontSize: 14 }}>
-                              {over ? `▲ ${money(spent - budget)} over` : `${money(budget - spent)} left`}
+                            <span style={{ fontWeight: 600 }}>{r.name}</span>
+                            <b style={{ fontSize: 14 }} className={estimate !== undefined && r.amount > estimate ? 'over' : ''}>
+                              {money(r.amount)}
                             </b>
                           </div>
-                          <div style={{ margin: '7px 0 4px' }}>
-                            <Bar value={budget ? spent / budget : 0} tone={over ? 'warn' : undefined} />
+                          <div style={{ margin: '6px 0 4px' }}>
+                            <Bar value={w.spent ? r.amount / w.spent : 0} />
                           </div>
                           <div className="row sub" style={{ gap: 8 }}>
                             <span>
-                              {money(spent)} of {money(budget)}
-                              {carried ? ` · ${carried > 0 ? '+' : '−'}${money(Math.abs(carried), true)} carried` : ' a week'}
+                              {Math.round((r.amount / Math.max(1, w.spent)) * 100)}% · {r.count} purchase{r.count === 1 ? '' : 's'}
+                              {estimate !== undefined && ` · estimate ${money(estimate, true)}`}
                             </span>
                             {avg !== null && (
-                              <span className="trend" title={`Average ${money(avg)} a week over the last 7 weeks`}>
+                              <span className="trend-mini" title={`Average ${money(avg)} a week over the 7 weeks before`}>
                                 <Spark values={t} />
                                 avg {money(avg, true)}
                               </span>
@@ -157,40 +197,27 @@ export function Spending() {
                           </div>
                         </div>
                       </button>
-                      <button className="add-btn" aria-label={`Log ${c.name} spending`} onClick={() => ui.open(<LogSheet categoryId={c.id} />)}>
-                        <Icon name="plus" size={18} stroke={2.4} />
-                      </button>
                     </li>
                   );
                 })}
-                {w.other > 0 && (
-                  <li>
-                    <div className="grow">
-                      <div className="row">
-                        <span style={{ fontWeight: 600 }}>Not in a bucket</span>
-                        <b style={{ fontSize: 14 }}>{money(w.other)}</b>
-                      </div>
-                      <div className="sub">Logged before buckets, or from a bucket that was deleted</div>
-                    </div>
-                  </li>
-                )}
               </ul>
             ) : (
-              <BucketIdeas />
+              <Empty>Nothing logged {current ? 'yet this week' : 'this week'}.</Empty>
             )}
           </div>
         </div>
 
         <div className="stack">
-          <WeekBills bills={w.bills} />
           <div className="card">
             <h3>
               {focusName ? `${focusName} purchases` : 'Purchases'}
               {focus && (
                 <span style={{ display: 'flex', gap: 14 }}>
-                  <button className="link" onClick={() => ui.open(<CategorySheet id={focus} />)}>
-                    Edit bucket
-                  </button>
+                  {cats.some((c) => c.id === focus) && (
+                    <button className="link" onClick={() => ui.open(<CategorySheet id={focus} />)}>
+                      Edit kind
+                    </button>
+                  )}
                   <button className="link" onClick={() => setFocus(null)}>
                     Show all
                   </button>
@@ -200,22 +227,23 @@ export function Spending() {
             {purchases.length ? (
               <ul className="list">
                 {purchases.map((p) => {
-                  const bucket = live(data.categories).find((c) => c.id === p.categoryId)?.name;
+                  const kind = where.find((r) => r.key === spendKey(p))?.name;
                   return (
                     <SwipeRow key={p.id} label="Edit" className="edit" onSwipe={() => ui.open(<SpendingSheet id={p.id} />)} leftLabel="Delete" onSwipeLeft={() => removeWithUndo('spending', p.id, money(p.amount))}>
                       <button className="rowbtn" onClick={() => ui.open(<SpendingSheet id={p.id} />)}>
                         <div className="grow">
-                          <div style={{ fontWeight: 600 }}>{p.note || bucket || 'Spending'}</div>
-                          <div className="sub">{[p.note && (bucket ?? 'Other'), weekdayDate(p.date), p.by].filter(Boolean).join(' · ')}</div>
+                          <div style={{ fontWeight: 600 }}>{p.note || kind || 'Spending'}</div>
+                          <div className="sub">{[p.note && kind, weekdayDate(p.date), p.by].filter(Boolean).join(' · ')}</div>
                         </div>
                         <span className="num">{money(p.amount)}</span>
                       </button>
+                      {!p.inferred && <PlannedToggle size="small" value={p.planned} onChange={(v) => update((d) => patch(d, 'spending', p.id, { planned: v }))} />}
                     </SwipeRow>
                   );
                 })}
               </ul>
             ) : (
-              <Empty>{current ? 'Nothing logged this week yet. Tap a bucket’s + after a purchase.' : 'Nothing logged this week.'}</Empty>
+              <Empty>{current ? 'Nothing logged this week yet. Tap + Log spending after a purchase.' : 'Nothing logged this week.'}</Empty>
             )}
           </div>
         </div>
@@ -224,7 +252,7 @@ export function Spending() {
   );
 }
 
-/** A bucket's spending over the last eight weeks as tiny bars; the last one is the week shown. */
+/** One kind of spending over the last eight weeks as tiny bars; the last one is the week shown. */
 function Spark({ values }: { values: number[] }) {
   const max = Math.max(1, ...values);
   return (
@@ -237,115 +265,30 @@ function Spark({ values }: { values: number[] }) {
   );
 }
 
-/** No buckets yet: one tap starts one from a common idea. */
-function BucketIdeas() {
-  const ui = useUI();
-  return (
-    <div style={{ textAlign: 'center', padding: '6px 0 4px' }}>
-      <p className="muted" style={{ fontSize: 14, marginTop: 0 }}>
-        Make a bucket for each kind of spending you log in a week.
-      </p>
-      <div className="chips">
-        {BUCKET_IDEAS.map((n) => (
-          <button key={n} className="chip" onClick={() => ui.open(<CategorySheet name={n} />)}>
-            + {n}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Six weeks of spending, with the weekly budget as a dashed line. Tap a week to open it. */
-function WeekBars({ weeks, budget, onPick }: { weeks: ReturnType<typeof weekSpending>[]; budget: number; onPick: (i: number) => void }) {
-  const top = Math.max(budget * 1.15, ...weeks.map((w) => w.spent), 1);
+/** Six weeks of spending, each against what was left after the musts that week. Tap a week to open it. */
+function WeekBars({ weeks, lefts, onPick }: { weeks: ReturnType<typeof weekSpending>[]; lefts: number[]; onPick: (i: number) => void }) {
+  const top = Math.max(...lefts.map((l) => l * 1.05), ...weeks.map((w) => w.spent), 1);
   const H = 96;
   return (
     <div className="wbars" role="group" aria-label="Spending in the last six weeks">
       <div className="row" style={{ marginBottom: 8 }}>
         <b style={{ fontSize: 14 }}>Last 6 weeks</b>
         <span className="faint" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <i className="k-budget" /> Budget {money(budget, true)}
+          <i className="k-budget" /> Left after the musts
         </span>
       </div>
       <div className="wbars-plot" style={{ height: H + 22 }}>
-        {budget > 0 && <div className="wbars-line" style={{ bottom: 22 + (budget / top) * H }} />}
-        {weeks.map((w, i) => (
-          <button key={w.start} style={{ ['--i' as string]: i }} className={i === 5 ? 'on' : ''} onClick={() => onPick(i)} aria-pressed={i === 5} aria-label={`Week of ${shortDate(w.start)}: ${money(w.spent)} spent`}>
-            <i style={{ height: Math.max(2, (w.spent / top) * H) }} className={w.spent > w.budget ? 'over' : ''} />
-            <span>{shortDate(w.start)}</span>
-          </button>
-        ))}
+        {weeks.map((w, i) => {
+          const l = lefts[i] ?? 0;
+          return (
+            <button key={w.start} style={{ ['--i' as string]: i }} className={i === 5 ? 'on' : ''} onClick={() => onPick(i)} aria-pressed={i === 5} aria-label={`Week of ${shortDate(w.start)}: ${money(w.spent)} spent of ${money(l)} left after the musts`}>
+              {l > 0 && <em className="wbars-mark" style={{ bottom: 22 + (l / top) * H }} />}
+              <i style={{ height: Math.max(2, (w.spent / top) * H) }} className={w.spent > l ? 'over' : ''} />
+              <span>{shortDate(w.start)}</span>
+            </button>
+          );
+        })}
       </div>
-    </div>
-  );
-}
-
-/** Bills, payments and set-asides leaving the bank this week, to tick off. */
-function WeekBills({ bills }: { bills: ScheduledOutflow[] }) {
-  const data = useData();
-  const act = useBillActions();
-  const ui = useUI();
-  const items = billItems(data);
-  const total = bills.reduce((s, b) => s + b.amount, 0);
-  return (
-    <div className="card">
-      <h3>
-        Bills this week
-        <button className="link" onClick={() => ui.go('bills')}>
-          All bills ›
-        </button>
-      </h3>
-      {bills.length ? (
-        <>
-          <ul className="list">
-            {bills.map((b) => {
-              const item = items.find((i) => i.itemId === b.itemId && i.itemKind === b.itemKind);
-              if (!item) return null;
-              if (b.part !== undefined) {
-                const parts = splitStatus(data, item, b.dueDate).parts;
-                const p = parts[b.part];
-                if (!p) return null;
-                return (
-                  <li key={`${b.itemId}${b.dueDate}${b.part}`}>
-                    <Tick done={!!p.done} label={p.done ? `Undo ${item.name} set-aside` : `Mark ${item.name} part ${b.part + 1} set aside`} onClick={() => act.toggleSetAside(item, b.dueDate, p)} />
-                    <div className="grow">
-                      <div style={{ fontWeight: 600 }}>
-                        {item.name} · set aside{!item.perPaycheck && ` ${b.part + 1} of ${parts.length}`}
-                      </div>
-                      <div className={`sub ${p.done ? 'good' : ''}`}>
-                        {p.done ? 'Set aside' : weekdayDate(b.date)} · for the {shortDate(b.dueDate)} payment
-                      </div>
-                    </div>
-                    <span className="num">{money(b.amount)}</span>
-                  </li>
-                );
-              }
-              const o = billsDue(data, b.dueDate, b.dueDate).find((x) => x.item.itemId === b.itemId && x.item.itemKind === b.itemKind);
-              if (!o) return null;
-              return (
-                <li key={`${b.itemId}${b.dueDate}`}>
-                  <Tick done={o.paid} label={o.paid ? `Mark ${item.name} not paid` : `Mark ${item.name} paid`} onClick={() => act.togglePaid(o)} />
-                  <div className="grow">
-                    <div style={{ fontWeight: 600 }}>{item.name}</div>
-                    <div className={`sub ${o.paid ? 'good' : ''}`}>
-                      {o.paid ? 'Paid' : weekdayDate(b.date)}
-                      {b.date !== b.dueDate && ` · due ${shortDate(b.dueDate)}`}
-                    </div>
-                  </div>
-                  <span className="num">{money(b.amount)}</span>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="row muted" style={{ fontSize: 13, borderTop: '1px solid var(--line)', paddingTop: 10, marginTop: 4 }}>
-            <span>Leaving the bank this week</span>
-            <b style={{ color: 'var(--ink)' }}>{money(total)}</b>
-          </div>
-        </>
-      ) : (
-        <Empty>No bills leave the bank this week.</Empty>
-      )}
     </div>
   );
 }

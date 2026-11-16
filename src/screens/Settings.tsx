@@ -3,7 +3,8 @@ import { live, paychecksPerYear } from '../engine';
 import type { Settings as SettingsT } from '../model/types';
 import { sampleData } from '../data/sample';
 import { exportJson, importJson } from '../store/storage';
-import { eraseAll, replaceEverything, updateHousehold, updateSettings } from '../store/actions';
+import { replaceEverything, updateHousehold, updateSettings } from '../store/actions';
+import { ResetSheet } from '../sheets/ResetSheet';
 import { useData, useStore, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import { MoneyField, NumberField, SelectField, Segmented, TextField } from '../ui/components';
@@ -108,7 +109,7 @@ export function Settings() {
               <div className="hint">Bills on autopay can be set to their due date one by one (Bills → tap a bill). Bills on the Bills page are grouped by this.</div>
             </div>
             <div className="form-grid">
-              <SelectField label="Weekly budgets reset on" value={String(data.household.weekStartsOn)} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} onChange={(v) => setHousehold({ weekStartsOn: Number(v) })} />
+              <SelectField label="Weeks start on" value={String(data.household.weekStartsOn)} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} onChange={(v) => setHousehold({ weekStartsOn: Number(v) })} />
               <MoneyField
                 label="Keep in checking"
                 hint="Your floor. Flake warns when checking is headed under it, and Send to a debt stays above it. Leave empty for no floor."
@@ -157,17 +158,8 @@ export function Settings() {
               >
                 Load demo data
               </button>
-              <button
-                className="btn small danger"
-                onClick={() =>
-                  ui.open(
-                    <ConfirmSheet title="Erase everything?" confirmLabel="Erase everything" onConfirm={() => store.update(eraseAll)}>
-                      All your paychecks, bills, debts, budgets and history are deleted, on this device and every synced one. This can't be undone, so download a backup first if you might want it back.
-                    </ConfirmSheet>,
-                  )
-                }
-              >
-                Erase everything
+              <button className="btn small danger" onClick={() => ui.open(<ResetSheet />)}>
+                Reset…
               </button>
             </div>
             <input

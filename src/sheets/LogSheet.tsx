@@ -6,6 +6,7 @@ import { useData, useDerived, useUpdate } from '../state/store';
 import { useUI } from '../state/ui';
 import { DateField, SelectField, Segmented, Sheet } from '../ui/components';
 import { money, weekdayDate } from '../ui/format';
+import { PlannedToggle } from '../ui/PlannedToggle';
 
 type Kind = 'spending' | 'bonus' | 'hours';
 
@@ -13,18 +14,22 @@ const MONEY_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫
 const HOURS_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 
 /**
- * Log money with an amount pad. Spending is always logged into one bucket,
- * the one whose + was tapped. Without a bucket it logs a bonus, or hours for hourly pay.
+ * Log money with an amount pad. Spending goes in the bucket whose + was tapped,
+ * or the one picked here (or none), and can be marked planned or unplanned.
+ * Opened for money in, it logs a bonus, or hours for hourly pay.
  */
-export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: string; initial?: 'bonus' | 'hours' }) {
+export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: string; initial?: 'spending' | 'bonus' | 'hours' }) {
   const data = useData();
   const x = useDerived();
   const update = useUpdate();
   const ui = useUI();
   const hourly = live(data.incomes).filter((s) => s.hourly);
-  const [kind, setKind] = useState<Kind>(categoryId ? 'spending' : initial === 'hours' && hourly.length ? 'hours' : 'bonus');
+  const [kind, setKind] = useState<Kind>(categoryId || initial === 'spending' ? 'spending' : initial === 'hours' && hourly.length ? 'hours' : 'bonus');
   const [digits, setDigits] = useState('');
-  const bucket = categoryId ? byId(data.categories, categoryId) : undefined;
+  const [catId, setCatId] = useState<string | null>(categoryId ?? null);
+  const [planned, setPlanned] = useState<boolean | undefined>(undefined);
+  const buckets = live(data.categories);
+  const bucket = catId ? byId(data.categories, catId) : undefined;
   const cat = bucket?.id ?? null;
   const [note, setNote] = useState('');
   const [date, setDate] = useState(x.today);
@@ -34,7 +39,7 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
     const me = getMe();
     return me && people.includes(me) ? me : people.length === 1 ? people[0]! : null;
   });
-  const recents = cat ? recentPurchases(data, cat) : [];
+  const recents = recentPurchases(data, cat);
   const cents = parseInt(digits || '0', 10);
   const hours = Number(digits || '0');
 
@@ -65,7 +70,7 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
   const save = () => {
     if (!ready) return;
     if (kind === 'spending') {
-      update((d) => logSpending(d, { date, amount: cents, categoryId: cat, note, by: by ?? undefined }));
+      update((d) => logSpending(d, { date, amount: cents, categoryId: cat, note, by: by ?? undefined, planned }));
       if (by) setMe(by);
       // Say where it landed.
       const budget = budgets.find((b) => b.c.id === cat);
@@ -73,7 +78,7 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
         const left = budget.left - cents;
         ui.toast(left >= 0 ? `Logged ${money(cents)} · ${money(left)} left in ${budget.c.name} this week` : `Logged ${money(cents)} · ${budget.c.name} is ${money(-left)} over this week`);
       } else {
-        ui.toast(`Logged ${money(cents)} (not from a budget)`);
+        ui.toast(`Logged ${money(cents)}${planned === false ? ' · unplanned' : ''}`);
       }
     } else if (kind === 'bonus') {
       update((d) => logBonus(d, { date, amount: cents, note: note || 'Bonus' }));
@@ -111,6 +116,16 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
       <div className="amount-display" aria-live="polite">
         {kind === 'hours' ? `${digits || '0'} hrs` : money(cents)}
       </div>
+
+      {kind === 'spending' && !categoryId && buckets.length > 0 && (
+        <div className="chips" role="radiogroup" aria-label="Bucket">
+          {[...buckets.map((c) => ({ id: c.id as string | null, name: c.name })), { id: null, name: 'Other' }].map((c) => (
+            <button key={c.id ?? 'other'} className="chip" role="radio" aria-checked={catId === c.id} aria-pressed={catId === c.id} onClick={() => setCatId(c.id)}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {kind === 'spending' && recents.length > 0 && (
         <div className="chips recent-chips" aria-label="Recent">
@@ -165,6 +180,12 @@ export function LogSheet({ categoryId, initial = 'bonus' }: { categoryId?: strin
           </button>
         ))}
       </div>
+      {kind === 'spending' && (
+        <div className="who">
+          <span className="faint">Was it planned?</span>
+          <PlannedToggle value={planned} onChange={setPlanned} />
+        </div>
+      )}
       {kind === 'spending' && people.length > 1 && (
         <div className="who" role="radiogroup" aria-label="Who's logging this">
           <span className="faint">Logged by</span>

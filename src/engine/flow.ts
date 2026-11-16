@@ -41,7 +41,7 @@ export function carriedIn(data: AppData, c: Category, weekStart: ISODate): Cents
 }
 
 /** The last few different purchases in a bucket (one per place, its latest amount), newest first, for one-tap logging. */
-export function recentPurchases(data: AppData, categoryId: Id, count = 4): { note: string; amount: Cents }[] {
+export function recentPurchases(data: AppData, categoryId: Id | null, count = 4): { note: string; amount: Cents }[] {
   const seen = new Set<string>();
   const out: { note: string; amount: Cents }[] = [];
   const list = live(data.spending)

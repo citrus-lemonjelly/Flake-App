@@ -7,6 +7,7 @@ import { useUI } from '../state/ui';
 import { useRemoveWithUndo } from '../state/undo';
 import { money } from '../ui/format';
 import { DateField, MoneyField, SelectField, Sheet, TextField } from '../ui/components';
+import { PlannedToggle } from '../ui/PlannedToggle';
 
 /**
  * Fix or sort one spending entry. Picking a budget for something a check-in
@@ -23,12 +24,13 @@ export function SpendingSheet({ id }: { id: string }) {
   const [note, setNote] = useState(entry?.note ?? '');
   const [date, setDate] = useState(entry?.date ?? '');
   const [by, setBy] = useState(entry?.by ?? '');
+  const [planned, setPlanned] = useState<boolean | undefined>(entry?.planned);
   const people = data.household.people.filter((p) => p && p !== 'Me');
   if (!entry) return null;
 
   const options = [
     ...live(data.categories).map((c) => ({ value: c.id, label: c.name })),
-    { value: 'other', label: 'Other (not from a budget)' },
+    { value: 'other', label: 'Other' },
     ...(entry.inferred ? [{ value: 'checkin', label: 'Leave unsorted (any budget)' }] : []),
   ];
 
@@ -60,6 +62,7 @@ export function SpendingSheet({ id }: { id: string }) {
                   note: where !== 'checkin' && note === 'Spending since last check-in' ? '' : note,
                   date,
                   by: by || undefined,
+                  planned,
                 }),
               );
               ui.toast('Saved');
@@ -77,9 +80,13 @@ export function SpendingSheet({ id }: { id: string }) {
         </p>
       )}
       <MoneyField label="Amount" value={amount} onChange={setAmount} allowEmpty />
-      <SelectField label="Budget" value={where} options={options} onChange={setWhere} />
+      <SelectField label="Kind" value={where} options={options} onChange={setWhere} />
       <TextField label="Note" value={entry.inferred && note === 'Spending since last check-in' ? '' : note} onChange={setNote} placeholder="e.g. Costco" />
       <DateField label="Date" value={date} onChange={setDate} />
+      <div className="who" style={{ margin: '4px 0 12px' }}>
+        <span className="faint">Was it planned?</span>
+        <PlannedToggle value={planned} onChange={setPlanned} />
+      </div>
       {people.length > 1 && <SelectField label="Logged by" value={by} options={[{ value: '', label: 'Not set' }, ...people.map((p) => ({ value: p, label: p }))]} onChange={setBy} />}
     </Sheet>
   );

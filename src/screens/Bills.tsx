@@ -5,7 +5,7 @@ import { useUI } from '../state/ui';
 import { BillSheet } from '../sheets/EditSheets';
 import { Bar, Empty } from '../ui/components';
 import { Icon } from '../ui/icons';
-import { fullDate, money, shortDate, weekdayDate } from '../ui/format';
+import { fullDate, money, monthOnly, shortDate, weekdayDate } from '../ui/format';
 import { HelpTip } from '../ui/ScreenTip';
 import { Tick, useBillActions } from '../ui/billActions';
 import { SwipeRow } from '../ui/Swipe';
@@ -159,13 +159,15 @@ function groupLabel(o: BillOccurrence, today: string): string {
 function BillRow({ o, today }: { o: BillOccurrence; today: string }) {
   const act = useBillActions();
   const ui = useUI();
+  const [open, setOpen] = useState(false);
   const late = !o.paid && o.payDate < today;
   const soon = !o.paid && !late && o.payDate <= addDays(today, 3);
   const sub = o.paid
     ? `Paid ${weekdayDate(o.payDate)}${o.item.saves ? ' · from the bucket' : o.auto ? ' · autopay' : ''}`
     : [`Due ${shortDate(o.dueDate)}`, o.item.autoTickSince && 'autopay', late && 'not paid yet'].filter(Boolean).join(' · ');
   return (
-    <SwipeRow label={o.paid ? 'Not paid' : 'Paid ✓'} className={o.paid ? 'undo' : ''} onSwipe={() => act.togglePaid(o)}>
+    <>
+      <SwipeRow label={o.paid ? 'Not paid' : 'Paid ✓'} className={`${o.paid ? 'undo' : ''} ${open ? 'trend-open' : ''}`} onSwipe={() => act.togglePaid(o)}>
       <span className={`date-tile ${o.paid ? 'paid' : late || soon ? 'soon' : ''}`} aria-hidden="true">
         <small>{WD[weekday(o.dueDate)]}</small>
         {Number(o.dueDate.slice(8))}
@@ -184,8 +186,55 @@ function BillRow({ o, today }: { o: BillOccurrence; today: string }) {
         {money(o.amount)}
         {o.changed && <small className="this-month">this month</small>}
       </span>
+      <button className="trend-btn" aria-label={`${o.item.name}: ${open ? 'hide' : 'show'} the last 6 months`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name={open ? 'up' : 'down'} size={15} stroke={2.2} />
+      </button>
       <Tick done={o.paid} label={o.paid ? `Mark ${o.item.name} not paid` : `Mark ${o.item.name} paid`} onClick={() => act.togglePaid(o)} />
-    </SwipeRow>
+      </SwipeRow>
+      {open && (
+        <li className="trend-li">
+          <BillTrend o={o} />
+        </li>
+      )}
+    </>
+  );
+}
+
+/**
+ * One bill's last six months: what it really came to each month, from the
+ * amounts recorded when it was paid or changed for the month.
+ */
+function BillTrend({ o }: { o: BillOccurrence }) {
+  const data = useData();
+  const past = billsDue(data, addMonths(o.dueDate, -5 * o.item.every), o.dueDate)
+    .filter((p) => p.item.itemKind === o.item.itemKind && p.item.itemId === o.item.itemId)
+    .slice(-6);
+  const amounts = past.map((p) => p.amount);
+  const max = Math.max(...amounts, 1);
+  const min = Math.min(...amounts, max);
+  // Scaled from the lowest month, so a $12 change shows next to a $120 bill.
+  const height = (c: number) => (max === min ? 24 : 8 + ((c - min) / (max - min)) * 32);
+  const avg = Math.round(amounts.reduce((a, b) => a + b, 0) / Math.max(1, amounts.length));
+  const high = past.reduce((m, p) => (p.amount > m.amount ? p : m), past[0] ?? o);
+  const changed = past.filter((p) => p.changed);
+  const usual = o.item.amount;
+  return (
+    <div className="bill-trend">
+      <div className="bars">
+        {past.map((p) => (
+          <div key={p.dueDate} className={p.changed ? 'changed' : ''} title={`${monthOnly(p.dueDate)}: ${money(p.amount)}${p.changed ? ' (recorded)' : ''}`}>
+            <span>{money(p.amount, true)}</span>
+            <i style={{ height: `${height(p.amount)}px` }} />
+            <small>{monthOnly(p.dueDate)}</small>
+          </div>
+        ))}
+      </div>
+      <div className="explain">
+        {changed.length
+          ? `Usually ${money(usual, true)} · 6-month average ${money(avg, true)} · highest ${money(high.amount, true)} in ${monthOnly(high.dueDate)}`
+          : `${money(usual, true)} every time so far. When a month comes to a different amount, tap the bill and set it; the trend fills in here.`}
+      </div>
+    </div>
   );
 }
 
