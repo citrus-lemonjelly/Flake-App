@@ -505,6 +505,7 @@ function DueSoon() {
             it.kind === 'bill' ? (
               <SwipeRow key={`b${it.o.item.itemId}${it.o.dueDate}`} label="Paid ✓" onSwipe={() => act.togglePaid(it.o)}>
                 <Tick done={false} label={`Mark ${it.o.item.name} paid`} onClick={() => act.togglePaid(it.o)} />
+                <button className="rowbtn grow" onClick={() => act.changeAmount(it.o)} aria-label={`${it.o.item.name}, ${money(it.o.amount)}: this month's amount`}>
                 <div className="grow">
                   <div style={{ fontWeight: 600 }}>{it.o.item.name}</div>
                   <div className={`sub ${it.date <= addDays(x.today, 2) ? 'soon' : ''}`}>
@@ -514,6 +515,7 @@ function DueSoon() {
                   </div>
                 </div>
                 <span className="num">{money(it.o.amount)}</span>
+                </button>
               </SwipeRow>
             ) : (
               <li key={`p${it.item.itemId}${it.dueDate}${it.p.index}`}>

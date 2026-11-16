@@ -164,7 +164,7 @@ export function AheadCard() {
           <div className="explain" style={{ marginTop: -6 }}>
             Pay that lands each month minus bills, set-asides and debt payments that leave it.
           </div>
-          <ul className="list mbars">
+          <ul className="list month-rows">
             {months.map((m, i) => (
               <li key={m.start}>
                 <span className="m">{i === 0 ? 'This mo' : monthOnly(m.start)}</span>
