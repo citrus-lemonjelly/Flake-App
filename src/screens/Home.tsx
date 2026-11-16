@@ -19,6 +19,7 @@ import { CheckInSheet } from '../sheets/CheckInSheet';
 import { AheadCard, BucketCard, WeeklyRunway } from './HomeRunway';
 import { SpendingSheet } from '../sheets/SpendingSheet';
 import { UsualNotice } from '../ui/UsualNotice';
+import { BalanceDaySheet } from '../sheets/BalanceDaySheet';
 import { FloorSheet } from '../sheets/FloorSheet';
 import { Tick, useBillActions } from '../ui/billActions';
 import { SwipeRow } from '../ui/Swipe';
@@ -240,6 +241,11 @@ function BalanceCard() {
   const typedToday = f.entry.date === x.today && f.inSince === 0 && f.outSince === 0;
   const last = lastBalance(data);
   const ago = last ? daysBetween(last.date, x.today) : 0;
+  // A tile picks its day on the chart and opens how checking gets there.
+  const show = (date: string, title: string, note?: string) => {
+    setDay(f.days.findIndex((d) => d.date === date));
+    ui.open(<BalanceDaySheet date={date} title={title} note={note} />);
+  };
 
   return (
     <div className="card balance">
@@ -322,32 +328,18 @@ function BalanceCard() {
       </div>
       <BalanceLine days={f.days} lowIndex={lowIndex} day={day} onDay={setDay} floor={floor} />
       <div className="bal-tiles">
-        <div className={f.low.balance < 0 ? 'bad' : f.low.balance < floor ? 'warn' : ''}>
-          <span>Lowest</span>
-          <b>{money(f.low.balance, true)}</b>
-          <small>{f.low.date === x.today ? 'today' : weekdayDate(f.low.date)}</small>
-        </div>
+        <BalTile className={f.low.balance < 0 ? 'bad' : f.low.balance < floor ? 'warn' : ''} label="Lowest" value={money(f.low.balance, true)} sub={f.low.date === x.today ? 'today' : weekdayDate(f.low.date)} onTap={() => show(f.low.date, 'Lowest', 'The lowest checking is headed over the next 30 days. Here’s how it gets there.')} />
         {floor > 0 && (
-          <div className={fc.spare > 0 ? 'good' : 'warn'}>
-            <span>Spare above {money(floor, true)}</span>
-            <b>{money(fc.spare, true)}</b>
-            <small>{fc.spare > 0 ? 'free to spend or send' : 'nothing spare'}</small>
-          </div>
+          <BalTile
+            className={fc.spare > 0 ? 'good' : 'warn'}
+            label={`Spare above ${money(floor, true)}`}
+            value={money(fc.spare, true)}
+            sub={fc.spare > 0 ? 'free to spend or send' : 'nothing spare'}
+            onTap={() => show(f.low.date, `Spare above ${money(floor, true)}`, `Spare is the lowest point, ${money(f.low.balance, true)} on ${weekdayDate(f.low.date)}, less your ${money(floor, true)} floor. Here’s how checking gets to that low.`)}
+          />
         )}
-        {payday && (
-          <div>
-            <span>After next payday</span>
-            <b>{money(payday.balance, true)}</b>
-            <small>{weekdayDate(payday.date)}</small>
-          </div>
-        )}
-        {monthEnd && (
-          <div>
-            <span>End of {monthName(monthEnd.date)}</span>
-            <b>{money(monthEnd.balance, true)}</b>
-            <small>{shortDate(monthEnd.date)}</small>
-          </div>
-        )}
+        {payday && <BalTile label="After next payday" value={money(payday.balance, true)} sub={weekdayDate(payday.date)} onTap={() => show(payday.date, 'After next payday')} />}
+        {monthEnd && <BalTile label={`End of ${monthName(monthEnd.date)}`} value={money(monthEnd.balance, true)} sub={shortDate(monthEnd.date)} onTap={() => show(monthEnd.date, `End of ${monthName(monthEnd.date)}`)} />}
       </div>
       {fc.under ? (
         <div className="notice" style={{ marginTop: 12 }}>
@@ -358,6 +350,19 @@ function BalanceCard() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** One balance tile; tap it for the breakdown. */
+function BalTile({ label, value, sub, className = '', onTap }: { label: string; value: string; sub: string; className?: string; onTap: () => void }) {
+  return (
+    <button className={`bal-tile ${className}`} onClick={onTap} aria-label={`${label}: ${value}, ${sub}. Show the breakdown`}>
+      <span>{label}</span>
+      <b>{value}</b>
+      <small>
+        {sub} <i aria-hidden="true">›</i>
+      </small>
+    </button>
   );
 }
 

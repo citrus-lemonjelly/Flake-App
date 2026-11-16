@@ -728,3 +728,15 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; letter-spacing: -0.01e
 .usual-notice span { display: block; font-size: 12.5px; color: var(--ink2); margin-top: 2px; }
 .usual-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .card .usual-notice { margin: 6px 0 8px; }
+.bal-tiles > .bal-tile { all: unset; box-sizing: border-box; cursor: pointer; display: block; background: var(--surface2); border-radius: 12px; padding: 8px 10px; transition: background 0.15s; }
+.bal-tiles > .bal-tile:hover { background: color-mix(in oklab, var(--accent) 8%, var(--surface2)); }
+.bal-tiles > .bal-tile:active { opacity: 0.75; }
+.bal-tiles > .bal-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bal-tile small i { font-style: normal; color: var(--accent); font-weight: 700; }
+.path-sum { background: var(--surface2); border-radius: 12px; padding: 6px 12px; }
+.path-head { margin: 16px 0 4px; font-size: 14px; }
+.path-list > li { display: block; padding: 8px 0; }
+.path-date { font-size: 12px; font-weight: 600; color: var(--ink3); margin-bottom: 2px; }
+.path-list .row { padding: 3px 0; font-size: 14px; gap: 10px; }
+.path-list .row > span:last-child { white-space: nowrap; }
+.path-list small { display: block; font-size: 11.5px; color: var(--ink3); }

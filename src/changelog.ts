@@ -12,6 +12,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.0',
+    date: '2026-11-16',
+    title: 'Tap the bank balance numbers to see why',
+    items: [
+      'On the Bank balance card, tap Lowest, Spare, After next payday or End of the month.',
+      'Each one shows how checking gets there: what’s in it now, pay coming in, bills, set-asides, debt payments and the spending your estimates expect, adding up to that day’s balance.',
+      'Below that, every paycheck, bill and set-aside on the way, by date. The chart jumps to that day too.',
+    ],
+  },
+  {
     version: '0.23.0',
     date: '2026-11-16',
     title: 'Flake notices when a bill’s amount has changed for good',
