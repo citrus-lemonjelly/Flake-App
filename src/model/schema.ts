@@ -98,6 +98,7 @@ export const appDataSchema = z.object({
       anchor: date.optional(),
       savePerPaycheck: z.boolean().optional(),
       ...autoTick,
+      keepUsualOver: cents.optional(),
     }),
   ),
   categories: z.array(

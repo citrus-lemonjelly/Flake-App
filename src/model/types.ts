@@ -139,6 +139,8 @@ export interface Bill extends Entity {
   /** Autopay: ticks itself off as paid on its date, starting from autoTickSince. */
   autoTick?: boolean;
   autoTickSince?: ISODate;
+  /** The household kept the usual amount over this new one; Flake doesn't suggest it again. */
+  keepUsualOver?: Cents;
 }
 
 export type CategoryCadence = 'weekly' | 'per-period' | 'monthly';
