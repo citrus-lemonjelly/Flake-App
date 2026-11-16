@@ -94,7 +94,35 @@ export function eraseAll(data: AppData): AppData {
   return next;
 }
 
-export function logSpending(data: AppData, s: { date: ISODate; amount: Cents; categoryId: Id | null; note?: string; inferred?: boolean; by?: string }): AppData {
+/** Parts of the data that Settings → Reset can clear on their own. */
+export const RESET_GROUPS = ['pay', 'bills', 'holding', 'spending', 'checkins', 'savings', 'debts', 'settings'] as const;
+export type ResetGroup = (typeof RESET_GROUPS)[number];
+
+/**
+ * Clear the picked parts of the data, leaving tombstones so the reset reaches
+ * other devices through sync. Records about a bill or debt (what was paid,
+ * what was set aside) go with that bill or debt.
+ */
+export function resetData(data: AppData, groups: ResetGroup[]): AppData {
+  const g = new Set(groups);
+  const stamp = nowStamp();
+  const blank = emptyData();
+  const gone = <T extends Entity>(list: T[], when: (r: T) => boolean = () => true): T[] => list.map((r) => (r.deletedAt || !when(r) ? r : { ...r, deletedAt: stamp, updatedAt: stamp }));
+  const about = (kinds: Set<string>) => (r: { itemKind: string }) => kinds.has(r.itemKind);
+  const items = new Set([...(g.has('bills') ? ['bill'] : []), ...(g.has('debts') ? ['debt'] : [])]);
+  let out: AppData = { ...data };
+  if (g.has('pay')) out = { ...out, incomes: gone(out.incomes), incomeReceived: gone(out.incomeReceived), paychecks: gone(out.paychecks) };
+  if (g.has('bills')) out = { ...out, bills: gone(out.bills) };
+  if (g.has('debts')) out = { ...out, debts: gone(out.debts), debtPayments: gone(out.debtPayments), milestones: gone(out.milestones) };
+  out = { ...out, billPayments: gone(out.billPayments, about(items)), setAsides: g.has('holding') ? gone(out.setAsides) : gone(out.setAsides, about(items)) };
+  if (g.has('spending')) out = { ...out, spending: gone(out.spending), categories: gone(out.categories) };
+  if (g.has('checkins')) out = { ...out, checkIns: gone(out.checkIns) };
+  if (g.has('savings')) out = { ...out, funds: gone(out.funds), allocations: gone(out.allocations) };
+  if (g.has('settings')) out = { ...out, settings: { ...blank.settings, updatedAt: stamp }, household: { ...blank.household, updatedAt: stamp } };
+  return out;
+}
+
+export function logSpending(data: AppData, s: { date: ISODate; amount: Cents; categoryId: Id | null; note?: string; inferred?: boolean; by?: string; planned?: boolean }): AppData {
   const { by, ...rest } = s;
   return upsert(data, 'spending', entity({ ...rest, note: s.note ?? '', ...(by && { by }) }));
 }

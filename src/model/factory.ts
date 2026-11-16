@@ -29,7 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export function emptyData(): AppData {
   return {
     version: SCHEMA_VERSION,
-    household: { name: 'My household', people: [], weekStartsOn: 4 },
+    household: { name: 'My household', people: [], weekStartsOn: 0, weekStartChosen: true },
     settings: { ...DEFAULT_SETTINGS },
     incomes: [],
     incomeReceived: [],

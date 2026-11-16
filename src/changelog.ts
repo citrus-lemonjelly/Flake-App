@@ -12,6 +12,23 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.0',
+    date: '2026-11-16',
+    title: 'What’s left each week, and where it went',
+    items: [
+      'Weeks now run Sunday to Saturday (change it in Settings → Weeks start on).',
+      'The top of Home is this week: pay in, minus bills, money set aside (like the mortgage) and debt payments, minus what you’ve spent. Pay and bills are spread over the days they cover, so a mortgage saved in halves takes about the same out of every week.',
+      'Ahead shows the next four weeks, or the next four months by real dates, so a month with an extra paycheck stands out.',
+      'Each holding bucket, like the mortgage, has its own card on Home: what’s in it and each half to set aside, to tick off.',
+      'The Bank balance card now has Log pay and Check in, with the bills waiting to be confirmed. The separate check-in card is gone.',
+      'Spending is a log of everything outside bills and debt. Log it from one button, pick what kind it was, and mark it planned or unplanned.',
+      'Spending shows what’s left after the musts, planned against unplanned, where it went with each kind’s average, and Worth a look notes, like the same place again and again or small buys adding up.',
+      'Weekly amounts for each kind of spending are now optional estimates.',
+      'On Bills, the arrow beside a bill opens its last six months, with the months that came to a different amount highlighted.',
+      'Settings → Reset clears just the parts you pick (pay, bills, holding buckets, spending, check-ins, savings, debts or settings), after downloading a backup.',
+    ],
+  },
+  {
     version: '0.21.0',
     date: '2026-11-14',
     title: 'Check in to confirm your bills',

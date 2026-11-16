@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { addDays, balanceForecast, billsToConfirm, checkingFloor, daysBetween, floorCheck, billItems, billsDue, bucketBalance, lastBalance, monthFlows, savingFor, splitStatus, weekRanges, weekSpending, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
+import { addDays, balanceForecast, billsToConfirm, checkingFloor, daysBetween, floorCheck, billItems, billsDue, lastBalance, monthFlows, plannedSplit, runway, savingFor, spendName, splitStatus, weekRanges, whereItWent, type BillItem, type BillOccurrence, type PartStatus } from '../engine';
 import { useData, useDerived, useUpdate } from '../state/store';
 import { updateSettings } from '../store/actions';
 import { useUI } from '../state/ui';
@@ -14,10 +14,10 @@ import { confirmStep, guideSteps, setGuide, type GuideStep, type GuideStepId } f
 import { LogSheet } from '../sheets/LogSheet';
 import { PaySheet } from '../sheets/PaySheet';
 import { HelpTip } from '../ui/ScreenTip';
-import { Icon } from '../ui/icons';
 import { BalanceLine, MonthBars, MonthLines, totalsTo } from '../ui/FlowChart';
 import { CheckInSheet } from '../sheets/CheckInSheet';
-import { SendToDebtSheet } from '../sheets/SendToDebtSheet';
+import { AheadCard, BucketCard, WeeklyRunway } from './HomeRunway';
+import { SpendingSheet } from '../sheets/SpendingSheet';
 import { FloorSheet } from '../sheets/FloorSheet';
 import { Tick, useBillActions } from '../ui/billActions';
 import { SwipeRow } from '../ui/Swipe';
@@ -61,7 +61,7 @@ export function Home() {
           <div className="title-row">
             <h1>Hi, {name}</h1>
             <HelpTip label="How Home works">
-              <b>Check in</b> each time you look at your bank: type what's in checking and confirm which bills went out. The top card shows that real balance, not a projection. Tap <b>Log pay</b> when a paycheck lands to put in what really arrived.
+              The top card is <b>this week</b>, Sunday to Saturday: pay in, minus bills, money set aside (like the mortgage) and debt payments, minus what you've spent. <b>Check in</b> on the Bank balance card each time you look at your bank, and tap <b>Log pay</b> when a paycheck lands.
             </HelpTip>
           </div>
           <div className="sub">
@@ -75,11 +75,13 @@ export function Home() {
         <div className="stack">
           <GettingStarted />
           <WeekReview />
-          <CheckInHero />
+          <WeeklyRunway />
           <BalanceCard />
+          <AheadCard />
           <FlowCard />
         </div>
         <div className="stack">
+          <BucketCard />
           <DueSoon />
           <ThisWeek />
         </div>
@@ -203,87 +205,6 @@ function GettingStarted() {
 }
 
 /**
- * The top of Home: the balance from the last check-in (what was really in the bank,
- * not a projection) and the bills waiting to be confirmed at the next one.
- */
-function CheckInHero() {
-  const data = useData();
-  const x = useDerived();
-  const ui = useUI();
-  const last = lastBalance(data);
-  const waiting = billsToConfirm(data, x.today);
-  const waitingTotal = waiting.reduce((s, o) => s + o.amount, 0);
-  const ago = last ? daysBetween(last.date, x.today) : 0;
-  const buckets = billItems(data)
-    .filter((i) => i.saves)
-    .map((i) => ({ item: i, balance: bucketBalance(data, i) }));
-  const hasDebt = data.debts.some((d) => !d.deletedAt && (d.balance ?? 0) > 0);
-  return (
-    <section className="hero" aria-label="Check in">
-      <div className="top">
-        <div className="label">{last ? 'In checking at your last check-in' : 'Check in with your bank'}</div>
-        <button className="btn white small" onClick={() => ui.open(<PaySheet />)}>
-          + Log pay
-        </button>
-      </div>
-      {last ? (
-        <>
-          <div className={`big ${last.balance < 0 ? 'neg' : ''}`}>
-            {last.balance < 0 ? '−' : ''}
-            {money(Math.abs(last.balance))}
-          </div>
-          <div className="hero-sub">{ago === 0 ? 'Checked in today' : `Checked in ${weekdayDate(last.date)} · ${ago} day${ago === 1 ? '' : 's'} ago`}</div>
-        </>
-      ) : (
-        <div className="hero-sub" style={{ margin: '10px 0 4px' }}>
-          Each time you look at your bank, type in what's in checking and confirm which bills went out.
-        </div>
-      )}
-      <div className="math">
-        {waiting.length ? (
-          <>
-            <div className="row" style={{ fontWeight: 700 }}>
-              <span>
-                {waiting.length} bill{waiting.length === 1 ? '' : 's'} to confirm
-              </span>
-              <span>{money(waitingTotal)}</span>
-            </div>
-            {waiting.slice(0, 3).map((o) => (
-              <div key={`${o.item.itemId}${o.dueDate}`} className="row">
-                <span>
-                  {o.item.name} · {shortDate(o.payDate)}
-                </span>
-                <span>{money(o.amount)}</span>
-              </div>
-            ))}
-            {waiting.length > 3 && <div className="row">and {waiting.length - 3} more</div>}
-          </>
-        ) : (
-          <div className="row">✓ Every bill due so far is confirmed</div>
-        )}
-      </div>
-      <div className="hero-btns">
-        <button className="btn white" onClick={() => ui.open(<CheckInSheet />)}>
-          Check in
-        </button>
-      </div>
-      {hasDebt && (
-        <button className="hero-send" onClick={() => ui.open(<SendToDebtSheet />)}>
-          <span>Send left over to a debt</span>
-          <b>›</b>
-        </button>
-      )}
-      {buckets.map(({ item, balance }) => (
-        <button key={item.itemId} className="hero-bucket" onClick={() => ui.go('bills')}>
-          <span>{item.name} bucket</span>
-          <b>{balance >= 0 ? `${money(balance)} saved` : `${money(-balance)} short`}</b>
-        </button>
-      ))}
-    </section>
-  );
-}
-
-/**
  * Checking: the last balance typed in, carried to today with everything logged
  * since, then projected a month ahead with paydays, bills, set-asides and buckets.
  */
@@ -305,7 +226,7 @@ function BalanceCard() {
           Type in what's in checking to see where it's headed over the next month, with your pay, bills, set-asides and spending.
         </p>
         <button className="btn small" onClick={() => ui.open(<CheckInSheet />)}>
-          Add balance
+          Check in
         </button>
       </div>
     );
@@ -316,6 +237,8 @@ function BalanceCard() {
   const payday = x.nextPaydays[0] && f.days.find((d) => d.date === x.nextPaydays[0]!.payday);
   const sel = day === null ? null : f.days[day]!;
   const typedToday = f.entry.date === x.today && f.inSince === 0 && f.outSince === 0;
+  const last = lastBalance(data);
+  const ago = last ? daysBetween(last.date, x.today) : 0;
 
   return (
     <div className="card balance">
@@ -327,8 +250,8 @@ function BalanceCard() {
               {floor ? `Keep ${money(floor, true)}` : 'No floor'}
             </button>
           )}
-          <button className="link" onClick={() => ui.open(<CheckInSheet />)}>
-            Update
+          <button className="link" onClick={() => ui.open(<PaySheet />)}>
+            + Log pay
           </button>
         </span>
       </h3>
@@ -360,7 +283,7 @@ function BalanceCard() {
       </div>
       <div className="muted" style={{ fontSize: 13 }}>
         {typedToday ? (
-          'Typed in today'
+          'Checked in today'
         ) : (
           <>
             <span className="nowrap">From {money(f.entry.balance)} on {shortDate(f.entry.date)}</span>
@@ -379,6 +302,7 @@ function BalanceCard() {
           </>
         )}
       </div>
+      <CheckInRow ago={last ? ago : null} />
       <div className="flow-readout" aria-live="polite" style={{ marginTop: 12 }}>
         {sel ? (
           <>
@@ -432,6 +356,38 @@ function BalanceCard() {
           Moving a bill, a set-aside or some spending past the next payday would {floor > 0 ? 'keep you above it' : 'cover it'}.
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Check in: when it was last done and the bills waiting to be confirmed. */
+function CheckInRow({ ago }: { ago: number | null }) {
+  const data = useData();
+  const x = useDerived();
+  const ui = useUI();
+  const waiting = billsToConfirm(data, x.today);
+  const total = waiting.reduce((s, o) => s + o.amount, 0);
+  const names = waiting
+    .slice(0, 3)
+    .map((o) => o.item.name)
+    .join(', ');
+  return (
+    <div className={`checkin-row ${waiting.length ? 'waiting' : ''}`}>
+      <div className="grow">
+        <b>{waiting.length ? `${waiting.length} bill${waiting.length === 1 ? '' : 's'} to confirm · ${money(total)}` : '✓ Every bill due so far is confirmed'}</b>
+        <span>
+          {waiting.length
+            ? names + (waiting.length > 3 ? ` and ${waiting.length - 3} more` : '')
+            : ago === null
+              ? 'Check in each time you look at your bank.'
+              : ago === 0
+                ? 'Checked in today'
+                : `Last check-in ${ago} day${ago === 1 ? '' : 's'} ago`}
+        </span>
+      </div>
+      <button className={`btn small ${waiting.length ? '' : 'ghost'}`} onClick={() => ui.open(<CheckInSheet />)}>
+        Check in
+      </button>
     </div>
   );
 }
@@ -582,14 +538,14 @@ function DueSoon() {
 
 const REVIEW_KEY = 'flake.review.';
 
-/** At the start of each week: how last week's spending went, bucket by bucket. Shown until dismissed. */
+/** At the start of each week: how last week went. Left after the musts, what was spent, and where it went. Shown until dismissed. */
 function WeekReview() {
   const data = useData();
   const x = useDerived();
   const [dismissed, setDismissed] = useState(false);
   const [thisWeek] = weekRanges(data, x.today, 1);
-  const [last] = weekRanges(data, addDays(thisWeek!.start, -7), 1);
-  const key = REVIEW_KEY + last!.start;
+  const lastStart = addDays(thisWeek!.start, -7);
+  const key = REVIEW_KEY + lastStart;
   const seen = (() => {
     try {
       return localStorage.getItem(key) === '1';
@@ -598,8 +554,9 @@ function WeekReview() {
     }
   })();
   const early = x.today <= addDays(thisWeek!.start, 2);
-  const w = useMemo(() => weekSpending(data, last!, false), [data, last!.start]);
-  if (dismissed || seen || !early || !w.byCategory.length || (w.spent === 0 && !w.purchases.length)) return null;
+  const w = useMemo(() => runway(data, lastStart, 1)[0]!, [data, lastStart]);
+  const entries = useMemo(() => data.spending.filter((s) => !s.deletedAt && s.date >= w.start && s.date <= w.end), [data.spending, w.start, w.end]);
+  if (dismissed || seen || !early || !entries.length) return null;
   const hide = () => {
     setDismissed(true);
     try {
@@ -608,12 +565,9 @@ function WeekReview() {
       /* not remembered */
     }
   };
-  const diff = w.budget - w.spent;
-  const rows = w.byCategory
-    .map((c) => ({ name: c.category.name, d: c.budget - c.spent, rolls: !!c.category.rollover }))
-    .filter((r) => r.d !== 0)
-    .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
-    .slice(0, 4);
+  const kept = w.left - w.spent;
+  const split = plannedSplit(entries);
+  const top = whereItWent(data, entries).slice(0, 3);
   return (
     <div className="card review">
       <h3>
@@ -627,84 +581,119 @@ function WeekReview() {
       </div>
       <div className="row" style={{ alignItems: 'baseline', margin: '6px 0 8px' }}>
         <span>
-          <span className="num" style={{ fontSize: 22 }}>{money(w.spent)}</span> <span className="muted" style={{ fontSize: 13 }}>of {money(w.budget, true)}</span>
+          <span className="num" style={{ fontSize: 22 }}>{money(w.spent)}</span> <span className="muted" style={{ fontSize: 13 }}>spent of {money(w.left, true)} left after the musts</span>
         </span>
-        <b className={diff < 0 ? 'over' : 'good-text'} style={{ fontSize: 14 }}>
-          {diff >= 0 ? `${money(diff)} under 🎉` : `${money(-diff)} over`}
+        <b className={kept < 0 ? 'over' : 'good-text'} style={{ fontSize: 14 }}>
+          {kept >= 0 ? `${money(kept)} kept 🎉` : `${money(-kept)} over`}
         </b>
       </div>
-      {rows.length > 0 && (
-        <ul className="list">
-          {rows.map((r) => (
-            <li key={r.name} style={{ padding: '7px 0' }}>
-              <span className="grow">{r.name}</span>
-              <span className={r.d < 0 ? 'over' : 'good-text'} style={{ fontSize: 13.5, fontWeight: 600 }}>
-                {r.d < 0 ? `▲ ${money(-r.d)} over` : `${money(r.d)} under`}
-                {r.rolls && <span className="faint" style={{ fontWeight: 400 }}> · {r.d < 0 ? 'comes out of' : 'rolls into'} this week</span>}
-              </span>
-            </li>
-          ))}
-        </ul>
+      {split.unplanned > 0 && (
+        <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+          {money(split.unplanned)} of it wasn’t planned.
+        </div>
       )}
+      <ul className="list">
+        {top.map((r) => (
+          <li key={r.key} style={{ padding: '7px 0' }}>
+            <span className="grow">{r.name}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+              {money(r.amount)} <span className="faint" style={{ fontWeight: 400 }}>· {r.count}×</span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-/** This week's spending against the weekly budgets. */
+/** This week's spending log: the total, planned against unplanned, where it went and the latest few. */
 function ThisWeek() {
   const data = useData();
   const x = useDerived();
   const ui = useUI();
   const [week] = weekRanges(data, x.today, 1);
-  const w = weekSpending(data, week!);
-  const daysLeft = Math.round((Date.parse(w.end) - Date.parse(x.today)) / 864e5);
+  const entries = data.spending
+    .filter((s) => !s.deletedAt && s.date >= week!.start && s.date <= week!.end)
+    .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt ?? b.updatedAt).localeCompare(a.createdAt ?? a.updatedAt));
+  const spent = entries.reduce((t, s) => t + s.amount, 0);
+  const split = plannedSplit(entries);
+  const where = whereItWent(data, entries).slice(0, 4);
   return (
     <div className="card">
       <h3>
-        This week's spending
-        <button className="link" onClick={() => ui.go('spending')}>
-          Details ›
-        </button>
+        This week’s spending
+        <span style={{ display: 'flex', gap: 14 }}>
+          <button className="link" onClick={() => ui.open(<LogSheet initial="spending" />)}>
+            + Log
+          </button>
+          <button className="link" onClick={() => ui.go('spending')}>
+            All ›
+          </button>
+        </span>
       </h3>
-      {w.byCategory.length ? (
+      {entries.length ? (
         <>
           <div className="row" style={{ alignItems: 'baseline', marginTop: -4 }}>
-            <span>
-              <span className="num" style={{ fontSize: 22 }}>{money(w.spent)}</span> <span className="muted" style={{ fontSize: 13 }}>of {money(w.budget, true)}</span>
-            </span>
+            <span className="num" style={{ fontSize: 22 }}>{money(spent)}</span>
             <span className="muted" style={{ fontSize: 13 }}>
-              {w.budget - w.spent >= 0 ? `${money(w.budget - w.spent)} left` : `${money(w.spent - w.budget)} over`} · {daysLeft === 0 ? 'last day' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
+              {entries.length} purchase{entries.length === 1 ? '' : 's'}
             </span>
           </div>
-          <div style={{ margin: '8px 0 14px' }}>
-            <Bar value={w.budget ? w.spent / w.budget : 0} tone={w.spent > w.budget ? 'warn' : undefined} />
-          </div>
-          <div className="cat-tiles">
-            {w.byCategory.map((c) => (
-              <div key={c.category.id} className="tile">
-                <button className="tile-main" onClick={() => ui.go('spending', { categoryId: c.category.id })} aria-label={`${c.category.name}: ${money(c.spent)} of ${money(c.budget)} this week`}>
-                  <b>{c.category.name}</b>
-                  <small className={c.spent > c.budget ? 'over' : ''}>
-                    {money(c.spent, true)} of {money(c.budget, true)}
-                    {c.spent > c.budget && ' · over'}
-                  </small>
-                  <Bar value={c.budget ? c.spent / c.budget : 0} tone={c.spent > c.budget ? 'warn' : undefined} />
-                </button>
-                <button className="add-btn" aria-label={`Log ${c.category.name} spending`} onClick={() => ui.open(<LogSheet categoryId={c.category.id} />)}>
-                  <Icon name="plus" size={16} stroke={2.4} />
-                </button>
-              </div>
+          <SplitBar split={split} />
+          <div className="where-chips">
+            {where.map((r) => (
+              <span key={r.key}>
+                {r.name} <b>{money(r.amount, true)}</b>
+              </span>
             ))}
           </div>
+          <ul className="list">
+            {entries.slice(0, 3).map((s) => (
+              <li key={s.id} className="tap" onClick={() => ui.open(<SpendingSheet id={s.id} />)}>
+                <div className="grow">
+                  <div style={{ fontWeight: 600 }}>{s.note || spendName(data, s.inferred ? 'checkin' : (s.categoryId ?? 'other'))}</div>
+                  <div className="sub">
+                    {weekdayDate(s.date)}
+                    {s.planned === false && ' · unplanned'}
+                    {s.planned === true && ' · planned'}
+                  </div>
+                </div>
+                <span className="num">{money(s.amount)}</span>
+              </li>
+            ))}
+          </ul>
         </>
       ) : (
-        <div className="empty">
-          No spending buckets yet.{' '}
-          <button className="link" onClick={() => ui.open(<CategorySheet />)}>
-            Make one
-          </button>
-        </div>
+        <div className="empty">Nothing logged this week yet. Tap + Log after you buy something outside the bills.</div>
       )}
+    </div>
+  );
+}
+
+/** Planned against unplanned spending as one bar. */
+export function SplitBar({ split }: { split: { planned: number; unplanned: number; unmarked: number } }) {
+  const total = split.planned + split.unplanned + split.unmarked;
+  if (!total) return null;
+  const pct = (c: number) => `${(c / total) * 100}%`;
+  return (
+    <div className="split">
+      <div className="split-bar" aria-hidden="true">
+        <i className="yes" style={{ width: pct(split.planned) }} />
+        <i className="no" style={{ width: pct(split.unplanned) }} />
+      </div>
+      <div className="split-key">
+        <span>
+          <i className="yes" /> Planned {money(split.planned, true)}
+        </span>
+        <span>
+          <i className="no" /> Unplanned {money(split.unplanned, true)}
+        </span>
+        {split.unmarked > 0 && (
+          <span>
+            <i /> Not marked {money(split.unmarked, true)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

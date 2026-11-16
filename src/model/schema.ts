@@ -43,6 +43,7 @@ export const appDataSchema = z.object({
     name: z.string(),
     people: z.array(z.string()),
     weekStartsOn: z.number().int().min(0).max(6),
+    weekStartChosen: z.boolean().optional(),
     updatedAt: z.string().optional(),
   }),
   settings: z.object({
@@ -110,7 +111,7 @@ export const appDataSchema = z.object({
       rolloverSince: date.optional(),
     }),
   ),
-  spending: z.array(z.object({ ...base, date, amount: cents, categoryId: z.string().nullable(), note: z.string(), inferred: z.boolean().optional(), by: z.string().optional() })),
+  spending: z.array(z.object({ ...base, date, amount: cents, categoryId: z.string().nullable(), note: z.string(), inferred: z.boolean().optional(), by: z.string().optional(), planned: z.boolean().optional() })),
   debts: z.array(
     z.object({
       ...base,
@@ -170,5 +171,16 @@ export function parseAppData(raw: unknown): AppData {
 
 function migrate(raw: unknown): unknown {
   // Version 1 is the first schema. Future versions add steps here: v1 → v2 → …
-  return raw;
+  return moveWeekToSunday(raw);
+}
+
+/**
+ * Weeks used to start on Thursday. Move older data to Sunday once; a fresh
+ * updatedAt lets the change win over other devices' older copies.
+ */
+function moveWeekToSunday(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const h = (raw as { household?: Record<string, unknown> }).household;
+  if (!h || typeof h !== 'object' || h.weekStartChosen) return raw;
+  return { ...raw, household: { ...h, weekStartsOn: 0, weekStartChosen: true, updatedAt: new Date().toISOString() } };
 }

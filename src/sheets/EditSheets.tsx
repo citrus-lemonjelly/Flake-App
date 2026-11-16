@@ -576,7 +576,7 @@ export function CategorySheet({ id, name: startName }: { id?: string; name?: str
   const taken = new Set(live(data.categories).map((x) => x.name.trim().toLowerCase()));
   const ideas = BUCKET_IDEAS.filter((n) => !taken.has(n.toLowerCase()));
   return (
-    <EditFrame title={existing ? `Edit ${existing.name}` : 'New spending bucket'} canSave={c.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'categories', c))} onDelete={existing ? () => removeWithUndo('categories', existing.id, existing.name) : undefined}>
+    <EditFrame title={existing ? `Edit ${existing.name}` : 'New kind of spending'} canSave={c.name.trim() !== ''} onSave={() => update((d) => upsert(d, 'categories', c))} onDelete={existing ? () => removeWithUndo('categories', existing.id, existing.name) : undefined}>
       {!existing && ideas.length > 0 && (
         <div className="chips" style={{ justifyContent: 'flex-start' }} aria-label="Ideas">
           {ideas.map((n) => (
@@ -587,7 +587,7 @@ export function CategorySheet({ id, name: startName }: { id?: string; name?: str
         </div>
       )}
       <TextField label="Name" value={c.name} onChange={(name) => set({ name })} placeholder="e.g. Groceries" />
-      <MoneyField label="Per week" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} hint={`What you usually spend, or could spend, each week. Weeks start on ${WEEKDAYS[data.household.weekStartsOn]}.`} />
+      <MoneyField label="Weekly estimate (optional)" value={c.amount} onChange={(amount) => set({ amount: amount ?? 0 })} hint={`Leave it at $0 to just track where money goes. With an estimate, Spending flags a week that goes over it. Weeks start on ${WEEKDAYS[data.household.weekStartsOn]}.`} />
       <Toggle
         label="Roll over what's left"
         hint="Money not spent this week carries into next week; spending over comes out of next week. Good for clothes or gifts; leave it off for groceries."

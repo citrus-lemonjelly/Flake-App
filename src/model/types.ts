@@ -163,6 +163,8 @@ export interface Spending extends Entity {
   inferred?: boolean;
   /** Who logged it (a name from the household). */
   by?: string;
+  /** Whether the purchase was planned. Unset until someone says. */
+  planned?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -345,8 +347,10 @@ export interface Settings {
 export interface Household {
   name: string;
   people: string[];
-  /** Weekday used for 'weekly' categories (4 = Thursday, matching a Thursday paycheck). */
+  /** First day of the week for weekly views and buckets (0 = Sunday). */
   weekStartsOn: number;
+  /** Set once the week start is settled; older data started on Thursday and moves to Sunday once. */
+  weekStartChosen?: boolean;
   /** Last edit, for sync. */
   updatedAt?: string;
 }
